@@ -1,0 +1,79 @@
+# LidGlass
+
+Inspired by the iPhone Duo animation. As you close a MacBook's lid, your screen turns into
+a pane of frosted glass that tips back on the hinge. It follows the lid-angle sensor, so the
+glass moves at the speed of your hand, holds when you pause, and retraces when you reopen.
+
+## Requirements
+
+- macOS 14 or later, Apple silicon or Intel
+- A MacBook with the continuous lid-angle sensor. Check with:
+
+  ```sh
+  hidutil list --matching '{"PrimaryUsagePage":32,"PrimaryUsage":138}'
+  ```
+
+  A `las` device in the output means the sensor is there.
+- Xcode command line tools (Swift 6)
+- Screen Recording permission for LidGlass. The glass is your own screen, redrawn.
+
+## Build and run
+
+```sh
+./build-app.sh            # builds build/LidGlass.app, ad-hoc signed
+open build/LidGlass.app
+```
+
+On first launch macOS asks for Screen Recording permission. Allow LidGlass in System
+Settings > Privacy & Security > Screen & System Audio Recording, then quit it from the
+menu bar icon and open it again. The first launch also takes the current lid angle as the
+resting angle.
+
+## Command line
+
+```sh
+build/LidGlass.app/Contents/MacOS/LidGlass --angle
+    # print the live lid angle; needs no permissions
+
+build/LidGlass.app/Contents/MacOS/LidGlass --render desktop.png out.png 0.55 etched
+    # render the glass over a still image at a given fold (0 to 1) and effect
+
+swift run FoldModelChecks
+    # checks for the angle-to-fold math
+```
+
+Set `LIDGLASS_FORCE_FOLD=0.5` when launching the binary to hold the glass at a fixed fold.
+
+## Settings
+
+Open from the menu bar icon.
+
+- **Effect**: Frosted, Etched, Ghost, Smoke, Prism, Clear
+- **Frost**, **Perspective**, **Edge softness**, **Corner radius**
+- **Responsiveness**: how tightly the glass tracks the lid
+- **Hinge sensitivity**: fold per degree of lid travel
+- **Minimum movement**: degrees the lid has to move before the glass responds. The
+  sensor wobbles by about a degree at rest, so keep this at 2 or above.
+- **Resting angle**: the angle at which the glass is flat. "Use current" recalibrates.
+- **Stationary frame rate**: 15 to 120 FPS while the lid is held still mid-fold
+- Show the lid angle in the menu bar, open at login
+
+The preview shows the material at the slider's fold. "Fold the screen with the slider"
+drives the real overlay from the slider instead of the lid.
+
+## How it works
+
+- `LidAngleSensor` reads HID feature report 1 from the `las` device 120 times a second.
+  The angle is a little-endian 16-bit value in degrees.
+- `FoldModel` (in `LidGlassCore`) maps the angle to a fold from 0 to 1 and smooths it.
+- `ScreenCaptureSource` streams the built-in display with ScreenCaptureKit, excluding
+  LidGlass's own windows so the overlay never captures itself. The stream runs only while
+  the lid moves or the glass is folded. It drops to the stationary frame rate once the
+  lid settles and stops when the glass is flat.
+- `GlassRenderer` copies each frame into a mipmapped texture and draws it on a
+  click-through window above everything. The vertex shader tips the pane about its bottom
+  edge with a perspective divide. The fragment shader gathers a grain-rotated spiral of
+  taps from prefiltered mips (frost that scatters rather than smears), heavier toward the
+  top, then adds tint, sheen, and a rounded-corner mask.
+- Shaders compile at launch from source, because the command line tools do not include
+  the offline Metal compiler.
