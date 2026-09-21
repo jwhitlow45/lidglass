@@ -28,7 +28,15 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null &&
     exit 1
 fi
 
-LIDGLASS_BUILD_DIR="$BUILD_DIR" ./build-app.sh
+# Built from an export of HEAD rather than the working copy, so the release holds exactly
+# the tagged source: an untracked file cannot slip into the archive.
+EXPORT="$(mktemp -d)"
+trap 'rm -rf "$EXPORT"' EXIT
+git archive HEAD | tar -x -C "$EXPORT"
+(cd "$EXPORT" && LIDGLASS_BUILD_DIR=build/release ./build-app.sh)
+mkdir -p "$BUILD_DIR"
+rm -rf "$APP"
+ditto "$EXPORT/build/release/LidGlass.app" "$APP"
 
 # An ad-hoc signature names no certificate, so no installed copy would accept the update.
 if ! codesign -d -r- "$APP" 2>&1 | grep -q "certificate leaf"; then
