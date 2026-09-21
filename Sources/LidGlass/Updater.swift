@@ -106,12 +106,16 @@ final class Updater {
     private func checkAutomatically() {
         guard settings.updatesAutomatically else { return }
         guard canRelaunchNow() else {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Updater.busyRetryDelay) { [weak self] in
-                self?.checkAutomatically()
-            }
+            retryAutomaticCheckLater()
             return
         }
         Task { @MainActor in await check(isAutomatic: true) }
+    }
+
+    private func retryAutomaticCheckLater() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Updater.busyRetryDelay) { [weak self] in
+            self?.checkAutomatically()
+        }
     }
 
     // MARK: - Checking and installing
@@ -130,14 +134,27 @@ final class Updater {
             let download = try await download(release)
             // Cleaned up by hand rather than with defer, which would not run once the app
             // terminates to relaunch.
+            let removeDownload = { try? FileManager.default.removeItem(at: download.workspace) }
             do {
                 try verify(download.app, as: release)
-                try install(download.app)
             } catch {
-                try? FileManager.default.removeItem(at: download.workspace)
+                removeDownload()
                 throw error
             }
-            try? FileManager.default.removeItem(at: download.workspace)
+            // The download takes a while. An automatic install must still be wanted, and the
+            // glass still down, at the moment it happens.
+            if isAutomatic && !(settings.updatesAutomatically && canRelaunchNow()) {
+                removeDownload()
+                if settings.updatesAutomatically { retryAutomaticCheckLater() }
+                return
+            }
+            do {
+                try install(download.app)
+            } catch {
+                removeDownload()
+                throw error
+            }
+            removeDownload()
             NSLog("LidGlass: installed \(release.version), relaunching")
             try relaunch()
         } catch {
