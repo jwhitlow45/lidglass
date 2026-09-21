@@ -112,7 +112,7 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         let status = CVMetalTextureCacheCreateTextureFromImage(
             kCFAllocatorDefault, textureCache, pixelBuffer, nil, .bgra8Unorm, width, height, 0, &wrapped)
         guard status == kCVReturnSuccess, let wrapped, let source = CVMetalTextureGetTexture(wrapped) else { return }
-        store(source: source)
+        store(source: source, keepingAlive: wrapped)
     }
 
     /// Used by the settings preview, which works from a still image rather than a stream.
@@ -120,7 +120,9 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         store(source: texture)
     }
 
-    private func store(source: MTLTexture) {
+    /// `keepingAlive` holds the capture's Core Video texture until the GPU has finished the
+    /// copy. Released earlier, the capture can reuse its pixels mid-copy.
+    private func store(source: MTLTexture, keepingAlive owner: AnyObject? = nil) {
         var current = mipped
         let wasEmpty = current == nil
         if current?.width != source.width || current?.height != source.height {
@@ -136,6 +138,7 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
                   destinationOrigin: MTLOrigin(x: 0, y: 0, z: 0))
         blit.generateMipmaps(for: destination)
         blit.endEncoding()
+        if let owner { buffer.addCompletedHandler { _ in withExtendedLifetime(owner) {} } }
         buffer.commit()
         // Published after the copy is queued: later draws on the same queue see the pixels.
         mipped = destination
