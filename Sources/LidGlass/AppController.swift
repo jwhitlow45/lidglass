@@ -84,6 +84,9 @@ final class AppController {
     /// The fold the renderer is drawing right now, for the settings preview.
     var currentFold: Double { renderer?.fold ?? 0 }
 
+    /// True while the glass covers the screen.
+    var isShowingGlass: Bool { window?.isVisible == true }
+
     func useCurrentAngleAsStart() {
         if let angle = sensor.readAngle() { settings.startAngle = angle }
     }

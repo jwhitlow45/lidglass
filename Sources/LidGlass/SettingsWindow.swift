@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import Combine
 import SwiftUI
 import MetalKit
@@ -316,6 +317,7 @@ private final class ArrowKeySlider: NSSlider {
 /// screenshot only exist while someone is looking at them.
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
+    private var eventMonitor: Any?
     private let controller: AppController
 
     init(controller: AppController) {
@@ -333,12 +335,38 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.setContentSize(hosting.view.fittingSize)
             window.center()
             self.window = window
+            eventMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+            ) { [weak self] event in
+                self?.stopSimulation(on: event) ?? event
+            }
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
 
+    /// While the slider folds the screen, the glass covers this window and hides the
+    /// controls that would stop it. Escape stops it, and so does any click while the glass
+    /// is showing. The click only stops the fold, rather than also landing on whatever
+    /// control is hidden under the glass. Returns nil for an event it used up.
+    private func stopSimulation(on event: NSEvent) -> NSEvent? {
+        let settings = Settings.shared
+        guard settings.isSimulating else { return event }
+        let isEscape = event.type == .keyDown && event.keyCode == UInt16(kVK_Escape)
+        let isClickOnGlass = event.type != .keyDown && controller.isShowingGlass
+        guard isEscape || isClickOnGlass else { return event }
+        settings.isSimulating = false
+        return nil
+    }
+
+    /// Switching to another window or app stops the fold too.
+    func windowDidResignKey(_ notification: Notification) {
+        Settings.shared.isSimulating = false
+    }
+
     func windowWillClose(_ notification: Notification) {
+        if let eventMonitor { NSEvent.removeMonitor(eventMonitor) }
+        eventMonitor = nil
         window?.contentViewController = nil
         window = nil
     }

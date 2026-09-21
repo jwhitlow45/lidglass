@@ -79,7 +79,8 @@ Open from the menu bar icon.
   the real cursor simply stays visible.
 
 The preview shows the material at the slider's fold. "Fold the screen with the slider"
-drives the real overlay from the slider instead of the lid.
+drives the real overlay from the slider instead of the lid. Escape, a click while the
+glass is showing, or switching to another window turns it off.
 
 ## How it works
 
