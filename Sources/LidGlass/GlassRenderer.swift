@@ -125,8 +125,8 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
     private func store(source: MTLTexture, keepingAlive owner: AnyObject? = nil) {
         var current = mipped
         let wasEmpty = current == nil
-        if current?.width != source.width || current?.height != source.height {
-            current = makeMippedTexture(width: source.width, height: source.height)
+        if current?.width != source.width || current?.height != source.height || current?.pixelFormat != source.pixelFormat {
+            current = makeMippedTexture(like: source)
         }
         guard let destination = current,
               let buffer = commandQueue.makeCommandBuffer(),
@@ -147,9 +147,12 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         }
     }
 
-    private func makeMippedTexture(width: Int, height: Int) -> MTLTexture? {
+    /// The copy into the mip chain is a byte copy, so the chain takes the source's channel
+    /// order. An RGBA image copied into a BGRA chain would swap red and blue. Sampling reads
+    /// either order correctly.
+    private func makeMippedTexture(like source: MTLTexture) -> MTLTexture? {
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
-            pixelFormat: .bgra8Unorm, width: width, height: height, mipmapped: true)
+            pixelFormat: source.pixelFormat, width: source.width, height: source.height, mipmapped: true)
         descriptor.usage = [.shaderRead, .renderTarget]
         descriptor.storageMode = .private
         return device.makeTexture(descriptor: descriptor)
