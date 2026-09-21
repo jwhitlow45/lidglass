@@ -27,6 +27,7 @@ final class Updater {
         case noArchive
         case noAppInArchive
         case wrongApp
+        case wrongArchitecture
         case versionMismatch(expected: ReleaseVersion, found: String)
         case untrusted(String)
         case cannotReplace(String)
@@ -37,6 +38,7 @@ final class Updater {
             case .noArchive: "The release has no \(Updater.archiveName) to install."
             case .noAppInArchive: "The release archive holds no LidGlass app."
             case .wrongApp: "The release archive holds a different app."
+            case .wrongArchitecture: "The update does not run on this Mac's processor."
             case .versionMismatch(let expected, let found): "The release says \(expected) but its app says \(found)."
             case .untrusted(let reason): "The update is not signed with this copy's certificate, so it was not installed. \(reason)"
             case .cannotReplace(let reason): "LidGlass could not replace itself: \(reason)"
@@ -69,6 +71,12 @@ final class Updater {
         self.feedURL = feedURL
         self.installedApp = installedApp
     }
+
+    #if arch(arm64)
+    static let hostArchitecture = NSBundleExecutableArchitectureARM64
+    #else
+    static let hostArchitecture = NSBundleExecutableArchitectureX86_64
+    #endif
 
     static var installedVersion: ReleaseVersion? {
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String).flatMap(ReleaseVersion.init)
@@ -217,6 +225,9 @@ final class Updater {
     func verify(_ app: URL, as release: Release) throws {
         guard let update = Bundle(url: app),
               update.bundleIdentifier == Bundle(url: installedApp)?.bundleIdentifier else { throw UpdateError.wrongApp }
+        guard update.executableArchitectures?.contains(NSNumber(value: Updater.hostArchitecture)) == true else {
+            throw UpdateError.wrongArchitecture
+        }
         let found = update.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "no version"
         guard ReleaseVersion(found) == release.version else {
             throw UpdateError.versionMismatch(expected: release.version, found: found)

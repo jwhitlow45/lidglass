@@ -11,8 +11,9 @@ VERSION="$(tr -d '[:space:]' < VERSION)"
 BUNDLE_ID="local.lidglass"
 IDENTITY="LidGlass Local Signing"
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/LidGlass"
+# Universal, because one release archive serves Apple silicon and Intel Macs alike.
+swift build -c release --arch arm64 --arch x86_64
+BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/LidGlass"
 
 # macOS grants Screen Recording to the signature's designated requirement. With the
 # certificate that requirement stays the same across builds. Ad-hoc, it names the exact
