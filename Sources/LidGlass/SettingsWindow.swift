@@ -175,9 +175,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingController(rootView: SettingsView(controller: controller))
             let window = NSWindow(contentViewController: hosting)
             window.title = "LidGlass"
-            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
+            // A grouped form scrolls, so left to itself the window takes the preview
+            // column's height and hides every section below the first.
+            window.setContentSize(hosting.view.fittingSize)
             window.center()
             self.window = window
         }
