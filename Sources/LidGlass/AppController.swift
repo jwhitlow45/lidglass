@@ -22,6 +22,8 @@ final class AppController {
     /// The rendered angle above follows every sample, so the glass never moves in steps.
     private var movementAnchor: Double = 0
     private var lastMovementTime = 0.0
+    /// Mirrors what the sensor was last told, so a tick only reaches it on a change.
+    private var sensorIsTracking = false
     private var fallbackTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -37,8 +39,13 @@ final class AppController {
         movementAnchor = angle
         calibrateOnFirstLaunch()
         sensor.onAngle = { [weak self] angle in self?.handle(angle: angle) }
-        sensor.start()
+        sensor.start(idleRate: settings.idlePollingRate)
         if !sensor.isAvailable { startFallbackTicks() }
+
+        settings.$idlePollingRate
+            .dropFirst()
+            .sink { [weak self] rate in self?.sensor.setIdleRate(rate) }
+            .store(in: &cancellables)
 
         settings.$isEnabled
             .sink { [weak self] enabled in if !enabled { self?.shutDownEffect() } }
@@ -108,6 +115,13 @@ final class AppController {
         let isMoving = settings.simulatedFold != nil || CACurrentMediaTime() - lastMovementTime < AppController.settleDelay
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
         apply(isMoving: isMoving, isAnimating: renderer.isAnimating, isFolded: isFolded && settings.isEnabled)
+
+        // Track the lid closely from the first movement until the glass is flat and still.
+        let isTracking = settings.isEnabled && (isMoving || isFolded || renderer.isAnimating)
+        if isTracking != sensorIsTracking {
+            sensorIsTracking = isTracking
+            sensor.setTracking(isTracking)
+        }
     }
 
     // MARK: - Power

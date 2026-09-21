@@ -2,9 +2,6 @@ import Foundation
 
 /// Pure mapping from a lid-angle reading to the fold the renderer draws.
 public enum FoldModel {
-    /// How often the lid-angle sensor is read.
-    public static let sensorSampleRate = 120.0
-
     /// Fold is zero until the lid closes past the start angle, and reaches one as the lid
     /// approaches shut. Sensitivity multiplies travel per degree, so a higher value folds
     /// further for the same movement.

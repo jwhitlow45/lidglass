@@ -66,6 +66,7 @@ final class Settings: ObservableObject {
     @Published var minimumMovement: Double { didSet { store(minimumMovement, "minimumMovement") } }
     @Published var startAngle: Double { didSet { store(startAngle, "startAngle") } }
     @Published var stationaryFrameRate: Int { didSet { store(stationaryFrameRate, "stationaryFrameRate") } }
+    @Published var idlePollingRate: Int { didSet { store(idlePollingRate, "idlePollingRate") } }
     @Published var showsAngleInMenuBar: Bool { didSet { store(showsAngleInMenuBar, "showsAngleInMenuBar") } }
 
     /// Scrubber state from the settings window. While simulating, the scrubber drives the
@@ -96,6 +97,7 @@ final class Settings: ObservableObject {
             "minimumMovement": 2.0,
             "startAngle": 110.0,
             "stationaryFrameRate": 30,
+            "idlePollingRate": 20,
             "showsAngleInMenuBar": false,
         ])
         isEnabled = d.bool(forKey: "isEnabled")
@@ -109,6 +111,7 @@ final class Settings: ObservableObject {
         minimumMovement = d.double(forKey: "minimumMovement")
         startAngle = d.double(forKey: "startAngle")
         stationaryFrameRate = d.integer(forKey: "stationaryFrameRate")
+        idlePollingRate = d.integer(forKey: "idlePollingRate")
         showsAngleInMenuBar = d.bool(forKey: "showsAngleInMenuBar")
         opensAtLogin = SMAppService.mainApp.status == .enabled
     }

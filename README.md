@@ -66,6 +66,10 @@ Open from the menu bar icon.
   movement in degrees past this angle, but once it has started the fold is measured from
   the angle itself, so it stops exactly where it started.
 - **Stationary frame rate**: 15 to 120 FPS while the lid is held still mid-fold
+- **Idle polling rate**: how often the lid is read while it is still, 5 to 120 times a
+  second. Lower rates use less battery but can start the glass later, up to one interval
+  after the lid starts moving. Once the lid moves, it is read 120 times a second until
+  the glass is flat again.
 - Show the lid angle in the menu bar, open at login
 
 The preview shows the material at the slider's fold. "Fold the screen with the slider"
@@ -73,8 +77,11 @@ drives the real overlay from the slider instead of the lid.
 
 ## How it works
 
-- `LidAngleSensor` reads HID feature report 1 from the `las` device 120 times a second.
-  The angle is a little-endian 16-bit value in degrees.
+- `LidAngleSensor` reads HID feature report 1 from the `las` device. The angle is a
+  little-endian 16-bit value in degrees. The sensor also sends the angle unasked, but only
+  once a second and it ignores requests to send faster, so it is polled: at the idle rate
+  while the lid is still, and 120 times a second from the first movement until the glass
+  settles.
 - `FoldModel` (in `LidGlassCore`) maps the angle to a fold from 0 to 1. The sensor reports
   whole degrees, so the fold arrives as a staircase. A critically damped spring, stepped on
   every drawn frame rather than on every sensor sample, rides through the steps.
