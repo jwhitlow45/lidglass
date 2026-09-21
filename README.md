@@ -56,6 +56,8 @@ Set `LIDGLASS_FORCE_FOLD=0.5` when launching the binary to hold the glass at a f
 Open from the menu bar icon.
 
 - **Effect**: Frosted, Etched, Ghost, Smoke, Prism, Clear
+- **Hinge edge**: the glass folds on the bottom edge of the screen, like the lid, or on the
+  top edge. Frost grows toward the edge that swings away.
 - **Frost**, **Perspective**, **Edge softness**, **Corner radius**
 - **Responsiveness**: how tightly the glass tracks the lid
 - **Hinge sensitivity**: fold per degree of lid travel
@@ -71,6 +73,10 @@ Open from the menu bar icon.
   after the lid starts moving. Once the lid moves, it is read 120 times a second until
   the glass is flat again.
 - Show the lid angle in the menu bar, open at login
+- **Hide the system cursor while folded** (on by default): the capture draws the cursor
+  into the glass, so the real one would be a second copy. Hiding it from a background app
+  takes a private WindowServer setting, looked up at run time. If a future macOS drops it,
+  the real cursor simply stays visible.
 
 The preview shows the material at the slider's fold. "Fold the screen with the slider"
 drives the real overlay from the slider instead of the lid.

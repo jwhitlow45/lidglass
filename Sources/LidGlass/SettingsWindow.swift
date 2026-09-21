@@ -105,6 +105,11 @@ struct SettingsView: View {
                     Picker("Effect", selection: $settings.effect) {
                         ForEach(GlassEffect.allCases) { Text($0.rawValue).tag($0) }
                     }
+                    Picker("Hinge edge", selection: $settings.hingeEdge) {
+                        ForEach(HingeEdge.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
                     slider("Frost", value: $settings.frost, range: 0...1, step: 0.01)
                     slider("Perspective", value: $settings.perspective, range: 0...1, step: 0.01)
                     slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, step: 0.5, unit: "px")

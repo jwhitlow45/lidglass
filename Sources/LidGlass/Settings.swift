@@ -13,6 +13,14 @@ enum GlassEffect: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// The screen edge the glass folds on. A MacBook's own hinge is along the bottom.
+enum HingeEdge: String, CaseIterable, Identifiable {
+    case bottom = "Bottom"
+    case top = "Top"
+
+    var id: String { rawValue }
+}
+
 /// Per-effect material constants. A mapped type keeps every effect answerable: adding a
 /// case to GlassEffect without a material here is a compile error.
 struct Material {
@@ -57,6 +65,7 @@ final class Settings: ObservableObject {
 
     @Published var isEnabled: Bool { didSet { store(isEnabled, "isEnabled") } }
     @Published var effect: GlassEffect { didSet { store(effect.rawValue, "effect") } }
+    @Published var hingeEdge: HingeEdge { didSet { store(hingeEdge.rawValue, "hingeEdge") } }
     @Published var frost: Double { didSet { store(frost, "frost") } }
     @Published var perspective: Double { didSet { store(perspective, "perspective") } }
     @Published var edgeSoftness: Double { didSet { store(edgeSoftness, "edgeSoftness") } }
@@ -89,6 +98,7 @@ final class Settings: ObservableObject {
         d.register(defaults: [
             "isEnabled": true,
             "effect": GlassEffect.frosted.rawValue,
+            "hingeEdge": HingeEdge.bottom.rawValue,
             "frost": 0.8,
             "perspective": 0.55,
             "edgeSoftness": 2.0,
@@ -104,6 +114,7 @@ final class Settings: ObservableObject {
         ])
         isEnabled = d.bool(forKey: "isEnabled")
         effect = GlassEffect(rawValue: d.string(forKey: "effect") ?? "") ?? .frosted
+        hingeEdge = HingeEdge(rawValue: d.string(forKey: "hingeEdge") ?? "") ?? .bottom
         frost = d.double(forKey: "frost")
         perspective = d.double(forKey: "perspective")
         edgeSoftness = d.double(forKey: "edgeSoftness")

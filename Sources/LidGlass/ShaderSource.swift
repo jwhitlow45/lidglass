@@ -33,7 +33,7 @@ struct Uniforms {
     float tintStrength;
     float maxLod;
     float isBackground;
-    float pad;
+    float hingeAtTop;
 };
 
 struct VertexOut {
@@ -62,8 +62,9 @@ vertex VertexOut glassVertex(uint vid [[vertex_id]], constant Uniforms &u [[buff
     // the GPU then divides by it itself and maps the texture perspective-correctly.
     // Dividing here leaves each of the quad's two triangles mapped flat, and the image
     // kinks along the diagonal where they meet.
-    float hinged = corner.y + 1.0;
-    float y = -1.0 + hinged * cos(u.theta);
+    float side = u.hingeAtTop > 0.5 ? -1.0 : 1.0;
+    float hinged = 1.0 + side * corner.y;
+    float y = side * (hinged * cos(u.theta) - 1.0);
     float depth = hinged * sin(u.theta);
     out.position = float4(corner.x, y, 0.0, (u.perspective + depth) / u.perspective);
     return out;
@@ -88,8 +89,9 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
         return float4(0.0, 0.0, 0.0, smoothstep(0.0, 0.15, u.progress));
     }
 
-    float fromTop = 1.0 - in.uv.y;
-    float frostAmount = saturate(u.frost * u.progress) * mix(u.frostBottom, u.frostTop, fromTop);
+    // 0 along the hinge, 1 along the free edge: frost and sheen grow toward the free edge.
+    float fromHinge = u.hingeAtTop > 0.5 ? in.uv.y : 1.0 - in.uv.y;
+    float frostAmount = saturate(u.frost * u.progress) * mix(u.frostBottom, u.frostTop, fromHinge);
 
     float2 pixel = in.uv * float2(u.texWidth, u.texHeight);
     float2 texel = float2(1.0 / u.texWidth, 1.0 / u.texHeight);
@@ -119,7 +121,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
 
     color += (grain - 0.5) * u.grainStrength * frostAmount;
     color = mix(color, float3(u.tintR, u.tintG, u.tintB), u.tintStrength * frostAmount);
-    color += u.sheen * sin(u.theta) * smoothstep(0.0, 1.0, fromTop);
+    color += u.sheen * sin(u.theta) * smoothstep(0.0, 1.0, fromHinge);
 
     // Rounded rect mask, measured in captured pixels so the radius matches the display.
     float2 halfSize = float2(u.texWidth, u.texHeight) * 0.5;
