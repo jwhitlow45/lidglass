@@ -125,7 +125,11 @@ final class AppController: ObservableObject {
     }
 
     private func tick() {
-        guard let renderer else { return }
+        // No renderer means no built-in display, so there is nothing to track the lid for.
+        guard let renderer else {
+            setSensorTracking(false)
+            return
+        }
         let target = settings.simulatedFold
             ?? FoldModel.target(angle: angle, startAngle: settings.startAngle,
                                 sensitivity: settings.hingeSensitivity, wobbleGuard: settings.minimumMovement,
@@ -139,11 +143,13 @@ final class AppController: ObservableObject {
         apply(isMoving: isMoving, isAnimating: renderer.isAnimating, isFolded: isFolded && settings.isEnabled)
 
         // Track the lid closely from the first movement until the glass is flat and still.
-        let isTracking = settings.isEnabled && (isMoving || isFolded || renderer.isAnimating)
-        if isTracking != sensorIsTracking {
-            sensorIsTracking = isTracking
-            sensor.setTracking(isTracking)
-        }
+        setSensorTracking(settings.isEnabled && (isMoving || isFolded || renderer.isAnimating))
+    }
+
+    private func setSensorTracking(_ isTracking: Bool) {
+        guard isTracking != sensorIsTracking else { return }
+        sensorIsTracking = isTracking
+        sensor.setTracking(isTracking)
     }
 
     // MARK: - Power
