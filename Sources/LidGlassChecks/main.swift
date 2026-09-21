@@ -68,4 +68,18 @@ for _ in 0..<6 {
 }
 check("a long frame lands close to several short ones", abs(long.fold - short.fold) < 0.02)
 
+// Release versions decide whether an update installs, so a wrong comparison either skips
+// updates or installs an older build.
+func version(_ text: String) -> ReleaseVersion? { ReleaseVersion(text) }
+check("a tag reads as its version", version("v1.2.3")?.parts == [1, 2, 3])
+check("a newer patch is newer", version("0.0.2")! > version("0.0.1")!)
+check("versions compare by number, not text", version("0.0.10")! > version("0.0.9")!)
+check("a newer minor beats any patch", version("0.2.0")! > version("0.1.99")!)
+check("missing trailing parts are zero", version("1.2")! == version("1.2.0")!)
+check("the same version is not newer", !(version("v0.0.1")! > version("0.0.1")!))
+check("an older version is not newer", !(version("0.0.9")! > version("0.1.0")!))
+check("a pre-release suffix is not a version", version("1.2.3-beta") == nil)
+check("an empty part is not a version", version("1..3") == nil && version("") == nil)
+check("a negative part is not a version", version("1.-2.3") == nil)
+
 exit(failures == 0 ? 0 : 1)

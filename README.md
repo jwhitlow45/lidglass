@@ -50,7 +50,7 @@ build/LidGlass.app/Contents/MacOS/LidGlass --render desktop.png out.png 0.55 etc
     # render the glass over a still image at a given fold (0 to 1) and effect
 
 swift run LidGlassChecks
-    # checks for the angle-to-fold math
+    # checks for the angle-to-fold math and for release version comparison
 ```
 
 Set `LIDGLASS_FORCE_FOLD=0.5` when launching the binary to hold the glass at a fixed fold.
