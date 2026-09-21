@@ -20,7 +20,8 @@ glass moves at the speed of your hand, holds when you pause, and retraces when y
 ## Build and run
 
 ```sh
-./build-app.sh            # builds build/LidGlass.app, ad-hoc signed
+./create-signing-identity.sh   # once: a local code signing certificate
+./build-app.sh                 # builds build/LidGlass.app
 open build/LidGlass.app
 ```
 
@@ -29,9 +30,11 @@ Settings > Privacy & Security > Screen & System Audio Recording, then quit it fr
 menu bar icon and open it again. The first launch also takes the current lid angle as the
 resting angle.
 
-The app is ad-hoc signed, so macOS ties the permission to the exact binary. When a rebuild
-changes the binary, `build-app.sh` resets the old grant and you allow LidGlass again. If the
-menu bar icon shows a warning triangle, the running build does not have permission.
+macOS ties the permission to how the app is signed. Signed with the local certificate, the
+permission survives rebuilds. Without it, `build-app.sh` signs ad-hoc, which ties the
+permission to one exact binary: each rebuild resets the old grant and you allow LidGlass
+again. If the menu bar icon shows a warning triangle, the running build does not have
+permission.
 
 ## Command line
 
