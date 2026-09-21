@@ -110,3 +110,5 @@ glass is showing, or switching to another window turns it off.
   top, then adds tint, sheen, and a rounded-corner mask.
 - Shaders compile at launch from source, because the command line tools do not include
   the offline Metal compiler.
+- The app icon is drawn as vectors in `Resources/AppIcon.svg`. `build-app.sh` renders it
+  into the bundle's icon whenever the SVG changes.

@@ -20,9 +20,20 @@ designated_requirement() {
 }
 OLD_REQUIREMENT="$( [ -d "$APP" ] && designated_requirement "$APP" || true)"
 
+# The icon is drawn as vectors in Resources/AppIcon.svg and rendered only when it changes.
+ICON_SVG="Resources/AppIcon.svg"
+ICNS="build/AppIcon.icns"
+if [ ! -f "$ICNS" ] || [ "$ICON_SVG" -nt "$ICNS" ]; then
+    rm -rf build/AppIcon.iconset
+    swift Resources/render-icon.swift "$ICON_SVG" build/AppIcon.iconset
+    iconutil -c icns build/AppIcon.iconset -o "$ICNS"
+    rm -rf build/AppIcon.iconset
+fi
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/LidGlass"
+cp "$ICNS" "$APP/Contents/Resources/AppIcon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -30,6 +41,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
     <key>CFBundleExecutable</key><string>LidGlass</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
     <key>CFBundleName</key><string>LidGlass</string>
     <key>CFBundlePackageType</key><string>APPL</string>

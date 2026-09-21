@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E2B6F"/>
+      <stop offset="1" stop-color="#2E8BAE"/>
+    </linearGradient>
+    <linearGradient id="frost" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.40"/>
+    </linearGradient>
+    <clipPath id="pane">
+      <polygon points="272,688 752,688 680,318 344,318"/>
+    </clipPath>
+  </defs>
+
+  <!-- The tile: macOS icon body, 824 square with 100 margin. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)"/>
+
+  <!-- The glass pane tipping back on the hinge: narrower at the far edge. -->
+  <polygon points="272,688 752,688 680,318 344,318" fill="url(#frost)"
+           stroke="#FFFFFF" stroke-opacity="0.95" stroke-width="14" stroke-linejoin="round"/>
+  <!-- A band of light across the glass. -->
+  <polygon points="470,318 560,318 420,688 330,688" fill="#FFFFFF" fill-opacity="0.22" clip-path="url(#pane)"/>
+
+  <!-- The hinge. -->
+  <rect x="222" y="681" width="580" height="44" rx="22" fill="#E9EEF6"/>
+</svg>
