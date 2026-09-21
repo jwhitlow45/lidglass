@@ -88,8 +88,9 @@ struct SettingsView: View {
                     .frame(width: 320, height: 200)
                     .background(Color.black.opacity(0.9))
                     .clipShape(RoundedRectangle(cornerRadius: 10))
-                Slider(value: $settings.simulationFold, in: 0...1) {
+                HStack {
                     Text("Fold")
+                    FocusSlider(value: $settings.simulationFold, range: 0...1, step: 0.01)
                 }
                 Toggle("Fold the screen with the slider", isOn: $settings.isSimulating)
                 Text(sensorStatus)
@@ -103,17 +104,17 @@ struct SettingsView: View {
                     Picker("Effect", selection: $settings.effect) {
                         ForEach(GlassEffect.allCases) { Text($0.rawValue).tag($0) }
                     }
-                    slider("Frost", value: $settings.frost, range: 0...1)
-                    slider("Perspective", value: $settings.perspective, range: 0...1)
-                    slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, unit: "px")
-                    slider("Corner radius", value: $settings.cornerRadius, range: 0...120, unit: "px")
+                    slider("Frost", value: $settings.frost, range: 0...1, step: 0.01)
+                    slider("Perspective", value: $settings.perspective, range: 0...1, step: 0.01)
+                    slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, step: 0.5, unit: "px")
+                    slider("Corner radius", value: $settings.cornerRadius, range: 0...120, step: 1, unit: "px")
                 }
                 section("Feel") {
-                    slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1)
-                    slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3)
-                    slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, unit: "°")
+                    slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1, step: 0.01)
+                    slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3, step: 0.05)
+                    slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, step: 0.5, unit: "°")
                     HStack {
-                        slider("Start angle", value: $settings.startAngle, range: 30...160, unit: "°")
+                        slider("Start angle", value: $settings.startAngle, range: 30...160, step: 1, unit: "°")
                         Button("Use current") { controller.useCurrentAngleAsStart() }
                             .disabled(!controller.sensorIsAvailable)
                     }
@@ -164,17 +165,83 @@ struct SettingsView: View {
         .toggleStyle(.switch)
     }
 
-    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String = "") -> some View {
+    private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double,
+                        unit: String = "") -> some View {
         HStack {
             Text(title)
                 .frame(width: 130, alignment: .leading)
-            Slider(value: value, in: range) { Text(title) }
-                .labelsHidden()
+            FocusSlider(value: value, range: range, step: step)
+                .accessibilityLabel(title)
             Text(unit.isEmpty ? String(format: "%.2f", value.wrappedValue) : String(format: "%.0f%@", value.wrappedValue, unit))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 44, alignment: .trailing)
         }
+    }
+}
+
+/// A slider that takes keyboard focus when clicked, so the arrow keys move it straight
+/// away. SwiftUI's own slider only takes focus through Tab.
+private struct FocusSlider: NSViewRepresentable {
+    let value: Binding<Double>
+    let range: ClosedRange<Double>
+    /// How far one arrow key press moves the slider. Shift moves ten steps.
+    let step: Double
+
+    func makeCoordinator() -> Coordinator { Coordinator(value: value) }
+
+    func makeNSView(context: Context) -> ArrowKeySlider {
+        let slider = ArrowKeySlider(value: value.wrappedValue, minValue: range.lowerBound, maxValue: range.upperBound,
+                                    target: context.coordinator, action: #selector(Coordinator.valueChanged(_:)))
+        slider.isContinuous = true
+        slider.step = step
+        return slider
+    }
+
+    func updateNSView(_ slider: ArrowKeySlider, context: Context) {
+        context.coordinator.value = value
+        slider.minValue = range.lowerBound
+        slider.maxValue = range.upperBound
+        slider.step = step
+        if slider.doubleValue != value.wrappedValue { slider.doubleValue = value.wrappedValue }
+    }
+
+    final class Coordinator: NSObject {
+        var value: Binding<Double>
+
+        init(value: Binding<Double>) {
+            self.value = value
+        }
+
+        @objc func valueChanged(_ sender: NSSlider) {
+            value.wrappedValue = sender.doubleValue
+        }
+    }
+}
+
+private final class ArrowKeySlider: NSSlider {
+    var step = 0.01
+
+    override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKeyView: Bool { true }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        let direction: Double
+        switch event.specialKey {
+        case .rightArrow?, .upArrow?: direction = 1
+        case .leftArrow?, .downArrow?: direction = -1
+        default:
+            super.keyDown(with: event)
+            return
+        }
+        let distance = step * (event.modifierFlags.contains(.shift) ? 10 : 1)
+        doubleValue = min(max(doubleValue + direction * distance, minValue), maxValue)
+        sendAction(action, to: target)
     }
 }
 
