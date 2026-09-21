@@ -21,6 +21,12 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastFailure = -Double.infinity
     private static let retryDelay = 2.0
 
+    /// Frames arrive in this colour space, and the glass is drawn in it too, so the glass
+    /// matches the screen exactly when it takes over. A MacBook display carries its own
+    /// calibrated profile rather than a named space, and Display P3 is the named space
+    /// closest to it.
+    static let colorSpace = CGColorSpace.displayP3
+
     /// Called on the capture queue for every frame.
     var onFrame: ((CVPixelBuffer) -> Void)?
 
@@ -83,6 +89,7 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
         config.width = pixelWidth
         config.height = pixelHeight
         config.pixelFormat = kCVPixelFormatType_32BGRA
+        config.colorSpaceName = ScreenCaptureSource.colorSpace
         config.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(max(frameRate, 1)))
         config.queueDepth = 5
         config.showsCursor = true

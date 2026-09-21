@@ -138,11 +138,15 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     color += u.strength * u.gloss * sin(u.theta) * exp(-band * band * 70.0);
 
     // Rounded rect mask, measured in captured pixels so the radius matches the display.
+    // The pane starts as an exact copy of the screen, square corners and hard edges, and
+    // takes on its rounded, softened edge over the first stretch of the fold. Otherwise
+    // the corners and edges snap as the glass takes over from the real screen.
+    float edgeIn = smoothstep(0.0, 0.1, u.progress);
     float2 halfSize = float2(u.texWidth, u.texHeight) * 0.5;
-    float cornerRadius = min(u.cornerRadius, min(halfSize.x, halfSize.y));
+    float cornerRadius = min(u.cornerRadius * edgeIn, min(halfSize.x, halfSize.y));
     float2 d = abs(pixel - halfSize) - (halfSize - cornerRadius);
     float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - cornerRadius;
-    float mask = saturate(0.5 - dist / max(u.edgeSoftness, 0.5));
+    float mask = saturate(0.5 - dist / max(u.edgeSoftness * edgeIn, 0.5));
 
     // Strength scales everything the effect adds, so at zero every effect is the bare fold.
     float alpha = mask * mix(1.0, u.paneAlpha, u.progress * u.strength);

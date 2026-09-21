@@ -156,12 +156,25 @@ final class AppController {
         if shouldShow {
             view.preferredFramesPerSecond = frameRate
             view.isPaused = false
-            if !window.isVisible { window.orderFrontRegardless() }
+            if !window.isVisible { reveal(window, drawnBy: renderer) }
             if settings.hidesSystemCursor { cursor.hide() } else { cursor.show() }
         } else {
             view.isPaused = true
             if window.isVisible { window.orderOut(nil) }
             cursor.show()
+        }
+    }
+
+    /// The window's layer still holds the last frame of the previous fold until it draws
+    /// again, and showing that for even one refresh flashes old content across the whole
+    /// screen. So the window comes up invisible and turns visible once its first new frame
+    /// is on screen. The timeout covers a frame that never reports being shown.
+    private func reveal(_ window: OverlayWindow, drawnBy renderer: GlassRenderer?) {
+        window.alphaValue = 0
+        renderer?.onNextPresent = { [weak window] in window?.alphaValue = 1 }
+        window.orderFrontRegardless()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
+            if window?.isVisible == true { window?.alphaValue = 1 }
         }
     }
 
@@ -192,6 +205,7 @@ final class AppController {
 
         let window = OverlayWindow(screen: screen)
         let view = OverlayView(device: device, renderer: renderer)
+        view.colorspace = CGColorSpace(name: ScreenCaptureSource.colorSpace)
         view.frame = window.contentLayoutRect
         window.contentView = view
 

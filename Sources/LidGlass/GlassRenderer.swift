@@ -69,6 +69,8 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
     var hasFrame: Bool { mipped != nil }
     /// Called on the main thread the first time a frame reaches the renderer.
     var onFirstFrame: (() -> Void)?
+    /// Called once on the main thread, after the next drawn frame is on screen.
+    var onNextPresent: (() -> Void)?
 
     init?(device: MTLDevice) {
         guard let queue = device.makeCommandQueue() else { return nil }
@@ -185,6 +187,10 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
               let drawable = view.currentDrawable,
               let buffer = commandQueue.makeCommandBuffer(),
               encode(pass: descriptor, into: buffer) else { return }
+        if let onNextPresent {
+            self.onNextPresent = nil
+            drawable.addPresentedHandler { _ in DispatchQueue.main.async(execute: onNextPresent) }
+        }
         buffer.present(drawable)
         buffer.commit()
     }
