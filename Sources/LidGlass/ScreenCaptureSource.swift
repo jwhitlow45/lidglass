@@ -29,6 +29,8 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
 
     /// Called on the capture queue for every frame.
     var onFrame: ((CVPixelBuffer) -> Void)?
+    /// Called on the main queue when the person stops the capture from macOS.
+    var onUserStopped: (() -> Void)?
 
     var isRunning: Bool { stream != nil }
 
@@ -123,8 +125,10 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
 
     func stream(_ stream: SCStream, didStopWithError error: Error) {
         NSLog("LidGlass: capture stopped: \(error)")
+        let wasStoppedByUser = (error as? SCStreamError)?.code == .userStopped
         DispatchQueue.main.async {
             if self.stream === stream { self.stream = nil }
+            if wasStoppedByUser { self.onUserStopped?() }
         }
     }
 

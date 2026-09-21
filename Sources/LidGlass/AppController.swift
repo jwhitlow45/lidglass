@@ -238,6 +238,10 @@ final class AppController {
         let pixelSize = screen.frame.size.applying(CGAffineTransform(scaleX: screen.backingScaleFactor, y: screen.backingScaleFactor))
         let capture = ScreenCaptureSource(displayID: displayID, pixelWidth: Int(pixelSize.width), pixelHeight: Int(pixelSize.height))
         capture.onFrame = { [weak renderer] pixelBuffer in renderer?.accept(pixelBuffer: pixelBuffer) }
+        // Stopping the capture from the macOS sharing menu means the person wants it off.
+        // Restarting it on the next reading would overrule them, so the effect turns off
+        // until they turn it back on from the menu bar.
+        capture.onUserStopped = { [weak self] in self?.settings.isEnabled = false }
 
         self.renderer = renderer
         self.window = window
