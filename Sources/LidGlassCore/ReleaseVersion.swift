@@ -2,7 +2,7 @@
 ///
 /// Missing trailing parts count as zero, so 1.2 and 1.2.0 are the same version. Anything
 /// that is not plain numbers, such as 1.2.3-beta, is not a version the updater installs.
-public struct ReleaseVersion: Comparable, CustomStringConvertible {
+public struct ReleaseVersion: Comparable, CustomStringConvertible, Sendable {
     public let parts: [Int]
 
     public init?(_ text: String) {
