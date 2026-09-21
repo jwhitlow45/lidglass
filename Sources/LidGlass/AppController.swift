@@ -52,17 +52,14 @@ final class AppController {
         settings.$isEnabled
             .sink { [weak self] enabled in if !enabled { self?.shutDownEffect() } }
             .store(in: &cancellables)
-        settings.$isSimulating
-            .sink { [weak self] _ in self?.tick() }
-            .store(in: &cancellables)
-        settings.$simulationFold
-            .sink { [weak self] _ in self?.tick() }
-            .store(in: &cancellables)
-        // Published before the stored value changes, so the tick runs on the next turn.
-        settings.$hidesSystemCursor
-            .dropFirst()
+        // A published setting announces itself before it is stored, and tick() reads the
+        // stored values, so these ticks wait for the next turn of the main queue. The main
+        // queue, unlike a run loop timer, keeps running while a slider is dragged.
+        Publishers.Merge3(settings.$isSimulating.map { _ in () },
+                          settings.$simulationFold.map { _ in () },
+                          settings.$hidesSystemCursor.map { _ in () })
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.tick() }
+            .sink { [weak self] in self?.tick() }
             .store(in: &cancellables)
 
         NotificationCenter.default.addObserver(
