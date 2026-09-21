@@ -135,6 +135,7 @@ struct SettingsView: View {
                 section("App") {
                     switchRow("Effect enabled", isOn: $settings.isEnabled)
                     switchRow("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
+                    switchRow("Hide the system cursor while folded", isOn: $settings.hidesSystemCursor)
                     switchRow("Open at login", isOn: $settings.opensAtLogin)
                 }
             }

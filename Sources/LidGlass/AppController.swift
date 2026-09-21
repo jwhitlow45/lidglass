@@ -15,6 +15,8 @@ final class AppController {
     private var renderer: GlassRenderer?
     private var window: OverlayWindow?
     private var view: OverlayView?
+    /// The capture draws the cursor into the glass, so the real one would be a second copy.
+    private let cursor = CursorHider()
 
     private var angle: Double = 0
     /// The angle movement is measured from. It only follows the lid in steps of the
@@ -54,6 +56,12 @@ final class AppController {
             .sink { [weak self] _ in self?.tick() }
             .store(in: &cancellables)
         settings.$simulationFold
+            .sink { [weak self] _ in self?.tick() }
+            .store(in: &cancellables)
+        // Published before the stored value changes, so the tick runs on the next turn.
+        settings.$hidesSystemCursor
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.tick() }
             .store(in: &cancellables)
 
@@ -149,13 +157,16 @@ final class AppController {
             view.preferredFramesPerSecond = frameRate
             view.isPaused = false
             if !window.isVisible { window.orderFrontRegardless() }
+            if settings.hidesSystemCursor { cursor.hide() } else { cursor.show() }
         } else {
             view.isPaused = true
             if window.isVisible { window.orderOut(nil) }
+            cursor.show()
         }
     }
 
     private func shutDownEffect() {
+        cursor.show()
         capture?.stop()
         renderer?.dropFrames()
         view?.isPaused = true

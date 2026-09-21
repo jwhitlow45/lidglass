@@ -68,6 +68,7 @@ final class Settings: ObservableObject {
     @Published var stationaryFrameRate: Int { didSet { store(stationaryFrameRate, "stationaryFrameRate") } }
     @Published var idlePollingRate: Int { didSet { store(idlePollingRate, "idlePollingRate") } }
     @Published var showsAngleInMenuBar: Bool { didSet { store(showsAngleInMenuBar, "showsAngleInMenuBar") } }
+    @Published var hidesSystemCursor: Bool { didSet { store(hidesSystemCursor, "hidesSystemCursor") } }
 
     /// Scrubber state from the settings window. While simulating, the scrubber drives the
     /// fold instead of the sensor. Neither value is worth keeping across launches.
@@ -99,6 +100,7 @@ final class Settings: ObservableObject {
             "stationaryFrameRate": 30,
             "idlePollingRate": 20,
             "showsAngleInMenuBar": false,
+            "hidesSystemCursor": true,
         ])
         isEnabled = d.bool(forKey: "isEnabled")
         effect = GlassEffect(rawValue: d.string(forKey: "effect") ?? "") ?? .frosted
@@ -113,6 +115,7 @@ final class Settings: ObservableObject {
         stationaryFrameRate = d.integer(forKey: "stationaryFrameRate")
         idlePollingRate = d.integer(forKey: "idlePollingRate")
         showsAngleInMenuBar = d.bool(forKey: "showsAngleInMenuBar")
+        hidesSystemCursor = d.bool(forKey: "hidesSystemCursor")
         opensAtLogin = SMAppService.mainApp.status == .enabled
     }
 
