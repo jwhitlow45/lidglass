@@ -366,6 +366,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         return nil
     }
 
+    /// Approving the login item happens in System Settings, so coming back to this window
+    /// is when its status may have changed.
+    func windowDidBecomeKey(_ notification: Notification) {
+        Settings.shared.refreshLoginItemStatus()
+    }
+
     /// Switching to another window or app stops the fold too.
     func windowDidResignKey(_ notification: Notification) {
         Settings.shared.isSimulating = false
