@@ -4,7 +4,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP="build/LidGlass.app"
+# LIDGLASS_BUILD_DIR lets a release build somewhere other than the copy in use.
+BUILD_DIR="${LIDGLASS_BUILD_DIR:-build}"
+APP="$BUILD_DIR/LidGlass.app"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 BUNDLE_ID="local.lidglass"
 IDENTITY="LidGlass Local Signing"

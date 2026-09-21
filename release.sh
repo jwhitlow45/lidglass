@@ -7,8 +7,11 @@ cd "$(dirname "$0")"
 VERSION="$(tr -d '[:space:]' < VERSION)"
 TAG="v$VERSION"
 REPO="jwhitlow45/lidglass"
-APP="build/LidGlass.app"
-ARCHIVE="build/LidGlass.zip"
+# Built apart from build/LidGlass.app, so publishing never replaces the copy in use. That
+# copy updates like any installed one.
+BUILD_DIR="build/release"
+APP="$BUILD_DIR/LidGlass.app"
+ARCHIVE="$BUILD_DIR/LidGlass.zip"
 
 # The release is built from the working copy and tagged on HEAD, so they must match.
 if ! git diff --quiet HEAD --; then
@@ -25,7 +28,7 @@ if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null &&
     exit 1
 fi
 
-./build-app.sh
+LIDGLASS_BUILD_DIR="$BUILD_DIR" ./build-app.sh
 
 # An ad-hoc signature names no certificate, so no installed copy would accept the update.
 if ! codesign -d -r- "$APP" 2>&1 | grep -q "certificate leaf"; then
