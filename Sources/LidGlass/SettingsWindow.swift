@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import MetalKit
 import ScreenCaptureKit
@@ -25,7 +26,7 @@ struct PreviewView: NSViewRepresentable {
         let view: MTKView
         private let renderer: GlassRenderer?
         private let controller: AppController
-        private var timer: Timer?
+        private var foldSubscription: AnyCancellable?
 
         init(controller: AppController) {
             self.controller = controller
@@ -40,15 +41,15 @@ struct PreviewView: NSViewRepresentable {
             view.delegate = renderer
             view.preferredFramesPerSecond = 60
             loadStill()
-            timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
-                guard let self, let renderer = self.renderer else { return }
-                renderer.foldTarget = Settings.shared.simulationFold
+            // Follows the value as it changes rather than on a timer: while a slider is being
+            // dragged, the main thread runs only the drag, and ordinary timers wait for release.
+            foldSubscription = Settings.shared.$simulationFold.sink { [weak renderer] fold in
+                renderer?.foldTarget = fold
             }
         }
 
         func stop() {
-            timer?.invalidate()
-            timer = nil
+            foldSubscription = nil
             view.isPaused = true
         }
 
