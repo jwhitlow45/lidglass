@@ -4,6 +4,8 @@ Inspired by the iPhone Duo animation. As you close a MacBook's lid, your screen 
 a pane of frosted glass that tips back on the hinge. It follows the lid-angle sensor, so the
 glass moves at the speed of your hand, holds when you pause, and retraces when you reopen.
 
+![The glass folding back and returning, at the default settings](docs/demo.gif)
+
 ## Requirements
 
 - macOS 14 or later, Apple silicon or Intel
