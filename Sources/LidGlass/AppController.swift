@@ -6,7 +6,7 @@ import MetalKit
 
 /// Wires the sensor to the capture stream and the overlay, and decides when each of them
 /// is allowed to cost anything.
-final class AppController {
+final class AppController: ObservableObject {
     static let settleDelay = 0.3
 
     private let settings = Settings.shared
@@ -18,7 +18,8 @@ final class AppController {
     /// The capture draws the cursor into the glass, so the real one would be a second copy.
     private let cursor = CursorHider()
 
-    private var angle: Double = 0
+    /// The latest lid reading, observed by the settings window.
+    @Published private(set) var angle: Double = 0
     /// The angle movement is measured from. It only follows the lid in steps of the
     /// minimum movement, which keeps the sensor's wobble at rest from counting as moving.
     /// The rendered angle above follows every sample, so the glass never moves in steps.
@@ -38,7 +39,6 @@ final class AppController {
     var onAngleChange: ((Double, Bool) -> Void)?
 
     var sensorIsAvailable: Bool { sensor.isAvailable }
-    var currentAngle: Double { angle }
 
     func start() {
         buildOverlay()
@@ -108,7 +108,7 @@ final class AppController {
     // MARK: - Sampling
 
     private func handle(angle newAngle: Double) {
-        angle = newAngle
+        if newAngle != angle { angle = newAngle }
         if abs(newAngle - movementAnchor) >= settings.minimumMovement {
             lastMovementTime = CACurrentMediaTime()
             movementAnchor = newAngle

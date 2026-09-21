@@ -41,17 +41,27 @@ final class MenuBarController {
             self?.enabledItem.state = enabled ? .on : .off
         }.store(in: &cancellables)
 
-        settings.$showsAngleInMenuBar.sink { [weak self] shows in
-            guard let self, !shows else { return }
-            self.statusItem.button?.title = ""
-            self.shownAngle = nil
+        // A still lid sends no readings, so turning the angle on shows the latest one.
+        settings.$showsAngleInMenuBar.sink { [weak self, weak controller] shows in
+            guard let self else { return }
+            if shows, let controller, controller.sensorIsAvailable {
+                self.showAngle(controller.angle)
+            } else {
+                self.statusItem.button?.title = ""
+                self.shownAngle = nil
+            }
         }.store(in: &cancellables)
 
         controller.onAngleChange = { [weak self] angle, isAvailable in
-            guard let self, self.settings.showsAngleInMenuBar, isAvailable, Int(angle) != self.shownAngle else { return }
-            self.shownAngle = Int(angle)
-            self.statusItem.button?.title = " \(Int(angle))°"
+            guard let self, self.settings.showsAngleInMenuBar, isAvailable else { return }
+            self.showAngle(angle)
         }
+    }
+
+    private func showAngle(_ angle: Double) {
+        guard Int(angle) != shownAngle else { return }
+        shownAngle = Int(angle)
+        statusItem.button?.title = " \(Int(angle))°"
     }
 
     @objc private func toggleEnabled() {

@@ -81,7 +81,7 @@ struct PreviewView: NSViewRepresentable {
 }
 
 struct SettingsView: View {
-    let controller: AppController
+    @ObservedObject var controller: AppController
     @ObservedObject private var settings = Settings.shared
 
     var body: some View {
@@ -169,7 +169,7 @@ struct SettingsView: View {
         guard controller.sensorIsAvailable else {
             return "No lid angle sensor found. Use the scrubber to see the effect."
         }
-        return String(format: "Lid angle sensor: %.0f°", controller.currentAngle)
+        return String(format: "Lid angle sensor: %.0f°", controller.angle)
     }
 
     /// Plain boxes rather than a grouped Form: a Form makes every row a focus stop of its
