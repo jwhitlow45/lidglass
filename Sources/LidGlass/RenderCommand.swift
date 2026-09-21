@@ -30,7 +30,8 @@ func runRenderCommand(_ arguments: [String]) -> Int32 {
         return 1
     }
     renderer.accept(texture: source)
-    renderer.fold = min(max(fold, 0), 1)
+    renderer.foldTarget = min(max(fold, 0), 1)
+    renderer.settleFold()
 
     let descriptor = MTLTextureDescriptor.texture2DDescriptor(
         pixelFormat: .bgra8Unorm, width: source.width, height: source.height, mipmapped: false)

@@ -64,7 +64,7 @@ final class Settings: ObservableObject {
     @Published var responsiveness: Double { didSet { store(responsiveness, "responsiveness") } }
     @Published var hingeSensitivity: Double { didSet { store(hingeSensitivity, "hingeSensitivity") } }
     @Published var minimumMovement: Double { didSet { store(minimumMovement, "minimumMovement") } }
-    @Published var restingAngle: Double { didSet { store(restingAngle, "restingAngle") } }
+    @Published var startAngle: Double { didSet { store(startAngle, "startAngle") } }
     @Published var stationaryFrameRate: Int { didSet { store(stationaryFrameRate, "stationaryFrameRate") } }
     @Published var showsAngleInMenuBar: Bool { didSet { store(showsAngleInMenuBar, "showsAngleInMenuBar") } }
 
@@ -94,7 +94,7 @@ final class Settings: ObservableObject {
             "responsiveness": 0.45,
             "hingeSensitivity": 1.0,
             "minimumMovement": 2.0,
-            "restingAngle": 110.0,
+            "startAngle": 110.0,
             "stationaryFrameRate": 30,
             "showsAngleInMenuBar": false,
         ])
@@ -107,7 +107,7 @@ final class Settings: ObservableObject {
         responsiveness = d.double(forKey: "responsiveness")
         hingeSensitivity = d.double(forKey: "hingeSensitivity")
         minimumMovement = d.double(forKey: "minimumMovement")
-        restingAngle = d.double(forKey: "restingAngle")
+        startAngle = d.double(forKey: "startAngle")
         stationaryFrameRate = d.integer(forKey: "stationaryFrameRate")
         showsAngleInMenuBar = d.bool(forKey: "showsAngleInMenuBar")
         opensAtLogin = SMAppService.mainApp.status == .enabled

@@ -42,7 +42,7 @@ struct PreviewView: NSViewRepresentable {
             loadStill()
             timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
                 guard let self, let renderer = self.renderer else { return }
-                renderer.fold = Settings.shared.simulationFold
+                renderer.foldTarget = Settings.shared.simulationFold
             }
         }
 
@@ -57,7 +57,7 @@ struct PreviewView: NSViewRepresentable {
             let displayID = AppController.displayID(of: screen)
             Task { @MainActor in
                 do {
-                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+                    let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
                     guard let display = content.displays.first(where: { $0.displayID == displayID }) else { return }
                     let ownApps = content.applications.filter { $0.processID == getpid() }
                     let filter = SCContentFilter(display: display, excludingApplications: ownApps, exceptingWindows: [])
@@ -112,10 +112,15 @@ struct SettingsView: View {
                     slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1)
                     slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3)
                     slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, unit: "°")
-                    HStack {
-                        slider("Resting angle", value: $settings.restingAngle, range: 30...160, unit: "°")
-                        Button("Use current") { controller.calibrateRestingAngle() }
-                            .disabled(!controller.sensorIsAvailable)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            slider("Start angle", value: $settings.startAngle, range: 30...160, unit: "°")
+                            Button("Use current") { controller.useCurrentAngleAsStart() }
+                                .disabled(!controller.sensorIsAvailable)
+                        }
+                        Text("The glass starts folding as the lid closes past this angle.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 Section("Power") {

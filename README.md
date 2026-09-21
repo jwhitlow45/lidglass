@@ -29,6 +29,10 @@ Settings > Privacy & Security > Screen & System Audio Recording, then quit it fr
 menu bar icon and open it again. The first launch also takes the current lid angle as the
 resting angle.
 
+The app is ad-hoc signed, so macOS ties the permission to the exact binary. When a rebuild
+changes the binary, `build-app.sh` resets the old grant and you allow LidGlass again. If the
+menu bar icon shows a warning triangle, the running build does not have permission.
+
 ## Command line
 
 ```sh
@@ -54,7 +58,10 @@ Open from the menu bar icon.
 - **Hinge sensitivity**: fold per degree of lid travel
 - **Minimum movement**: degrees the lid has to move before the glass responds. The
   sensor wobbles by about a degree at rest, so keep this at 2 or above.
-- **Resting angle**: the angle at which the glass is flat. "Use current" recalibrates.
+- **Start angle**: the glass starts folding as the lid closes past this angle. "Use
+  current" sets it to where the lid is sitting now. Starting the glass takes the minimum
+  movement in degrees past this angle, but once it has started the fold is measured from
+  the angle itself, so it stops exactly where it started.
 - **Stationary frame rate**: 15 to 120 FPS while the lid is held still mid-fold
 - Show the lid angle in the menu bar, open at login
 
@@ -65,7 +72,9 @@ drives the real overlay from the slider instead of the lid.
 
 - `LidAngleSensor` reads HID feature report 1 from the `las` device 120 times a second.
   The angle is a little-endian 16-bit value in degrees.
-- `FoldModel` (in `LidGlassCore`) maps the angle to a fold from 0 to 1 and smooths it.
+- `FoldModel` (in `LidGlassCore`) maps the angle to a fold from 0 to 1. The sensor reports
+  whole degrees, so the fold arrives as a staircase. A critically damped spring, stepped on
+  every drawn frame rather than on every sensor sample, rides through the steps.
 - `ScreenCaptureSource` streams the built-in display with ScreenCaptureKit, excluding
   LidGlass's own windows so the overlay never captures itself. The stream runs only while
   the lid moves or the glass is folded. It drops to the stationary frame rate once the

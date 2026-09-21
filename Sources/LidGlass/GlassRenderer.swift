@@ -3,6 +3,7 @@ import LidGlassCore
 import Metal
 import MetalKit
 import CoreVideo
+import QuartzCore
 
 struct Uniforms {
     var theta: Float = 0
@@ -53,8 +54,12 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         set { mippedLock.withLock { mippedStorage = newValue } }
     }
 
-    /// Fold state, written from the main thread by the app controller.
-    var fold: Double = 0
+    /// Where the lid says the glass should be, written by the app controller.
+    var foldTarget: Double = 0
+    /// Where the glass actually is: the spring runs on drawn frames, not sensor samples.
+    private(set) var fold: Double = 0
+    private var foldVelocity: Double = 0
+    private var lastStepTime = CACurrentMediaTime()
     var settings: Settings = .shared
     /// Replaces the chosen effect without touching saved settings.
     var effectOverride: GlassEffect?
@@ -151,7 +156,29 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
+    /// Advances the fold to now. Called for every drawn frame, and by the controller
+    /// while the overlay is hidden and nothing is drawing.
+    func stepFold() {
+        let now = CACurrentMediaTime()
+        let deltaTime = min(now - lastStepTime, 0.1)
+        lastStepTime = now
+        (fold, foldVelocity) = FoldModel.step(fold: fold, velocity: foldVelocity, target: foldTarget,
+                                              responsiveness: settings.responsiveness, deltaTime: deltaTime)
+    }
+
+    /// Puts the glass on the target at once, for a single offline frame.
+    func settleFold() {
+        fold = foldTarget
+        foldVelocity = 0
+    }
+
+    /// True while the glass is still catching up with the lid.
+    var isAnimating: Bool {
+        abs(foldTarget - fold) > FoldModel.restingTolerance || abs(foldVelocity) > FoldModel.restingTolerance
+    }
+
     func draw(in view: MTKView) {
+        stepFold()
         guard let descriptor = view.currentRenderPassDescriptor,
               let drawable = view.currentDrawable,
               let buffer = commandQueue.makeCommandBuffer(),

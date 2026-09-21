@@ -17,8 +17,10 @@ final class AppController {
     private var view: OverlayView?
 
     private var angle: Double = 0
-    private var fold: Double = 0
-    private var lastSampleTime = CACurrentMediaTime()
+    /// The angle movement is measured from. It only follows the lid in steps of the
+    /// minimum movement, which keeps the sensor's wobble at rest from counting as moving.
+    /// The rendered angle above follows every sample, so the glass never moves in steps.
+    private var movementAnchor: Double = 0
     private var lastMovementTime = 0.0
     private var fallbackTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -31,7 +33,8 @@ final class AppController {
 
     func start() {
         buildOverlay()
-        angle = sensor.readAngle() ?? settings.restingAngle
+        angle = sensor.readAngle() ?? settings.startAngle
+        movementAnchor = angle
         calibrateOnFirstLaunch()
         sensor.onAngle = { [weak self] angle in self?.handle(angle: angle) }
         sensor.start()
@@ -57,28 +60,29 @@ final class AppController {
         ) { [weak self] _ in self?.shutDownEffect() }
     }
 
-    /// A resting angle above the angle the lid actually sits at would hold the glass
-    /// partly folded, so the first launch takes the current angle as the resting one.
+    /// A start angle above the angle the lid actually sits at would hold the glass partly
+    /// folded, so the first launch starts the glass from where the lid is sitting.
     private func calibrateOnFirstLaunch() {
-        let key = "hasCalibratedRestingAngle"
+        let key = "hasCalibratedStartAngle"
         guard !UserDefaults.standard.bool(forKey: key), let angle = sensor.readAngle() else { return }
-        settings.restingAngle = angle
+        settings.startAngle = angle
         UserDefaults.standard.set(true, forKey: key)
     }
 
     /// The fold the renderer is drawing right now, for the settings preview.
-    var currentFold: Double { fold }
+    var currentFold: Double { renderer?.fold ?? 0 }
 
-    func calibrateRestingAngle() {
-        if let angle = sensor.readAngle() { settings.restingAngle = angle }
+    func useCurrentAngleAsStart() {
+        if let angle = sensor.readAngle() { settings.startAngle = angle }
     }
 
     // MARK: - Sampling
 
     private func handle(angle newAngle: Double) {
-        if abs(newAngle - angle) >= settings.minimumMovement {
+        angle = newAngle
+        if abs(newAngle - movementAnchor) >= settings.minimumMovement {
             lastMovementTime = CACurrentMediaTime()
-            angle = newAngle
+            movementAnchor = newAngle
         }
         onAngleChange?(newAngle, sensor.isAvailable)
         tick()
@@ -92,27 +96,27 @@ final class AppController {
     }
 
     private func tick() {
-        let now = CACurrentMediaTime()
-        let deltaTime = min(now - lastSampleTime, 0.1)
-        lastSampleTime = now
-
+        guard let renderer else { return }
         let target = settings.simulatedFold
-            ?? FoldModel.target(angle: angle, restingAngle: settings.restingAngle,
-                                sensitivity: settings.hingeSensitivity, deadband: settings.minimumMovement)
-        fold = FoldModel.smoothed(current: fold, target: target, responsiveness: settings.responsiveness, deltaTime: deltaTime)
-        if abs(fold - target) < 0.0005 { fold = target }
-        renderer?.fold = fold
+            ?? FoldModel.target(angle: angle, startAngle: settings.startAngle,
+                                sensitivity: settings.hingeSensitivity, wobbleGuard: settings.minimumMovement,
+                                hasStarted: renderer.foldTarget > 0)
+        renderer.foldTarget = target
+        // While the overlay is hidden nothing is drawing, so the spring is stepped here.
+        if view?.isPaused != false { renderer.stepFold() }
 
-        let isMoving = settings.simulatedFold != nil || now - lastMovementTime < AppController.settleDelay
-        let isFolded = fold > 0.001 || target > 0.001
-        apply(isMoving: isMoving, isFolded: isFolded && settings.isEnabled)
+        let isMoving = settings.simulatedFold != nil || CACurrentMediaTime() - lastMovementTime < AppController.settleDelay
+        let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
+        apply(isMoving: isMoving, isAnimating: renderer.isAnimating, isFolded: isFolded && settings.isEnabled)
     }
 
     // MARK: - Power
 
-    private func apply(isMoving: Bool, isFolded: Bool) {
+    private func apply(isMoving: Bool, isAnimating: Bool, isFolded: Bool) {
         guard let capture, let view, let window else { return }
-        let frameRate = isMoving ? 120 : settings.stationaryFrameRate
+        // A slow close reaches the minimum movement only every few tenths of a second, so
+        // the frame rate follows the glass rather than the last sensor step.
+        let frameRate = isMoving || isAnimating ? 120 : settings.stationaryFrameRate
 
         if isFolded || (isMoving && settings.isEnabled) {
             if capture.isRunning {
