@@ -336,14 +336,19 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.setContentSize(hosting.view.fittingSize)
             window.center()
             self.window = window
-            eventMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
-            ) { [weak self] event in
-                self?.stopSimulation(on: event) ?? event
-            }
+            watchForSimulationStops()
         }
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func watchForSimulationStops() {
+        eventMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            guard let self else { return event }
+            return self.stopSimulation(on: event)
+        }
     }
 
     /// While the slider folds the screen, the glass covers this window and hides the
