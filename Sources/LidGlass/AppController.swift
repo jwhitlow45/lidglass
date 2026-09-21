@@ -245,9 +245,10 @@ final class AppController {
         self.capture = capture
     }
 
-    /// The effect belongs to the display that moves with the lid.
+    /// The effect belongs to the display that moves with the lid. With the lid shut and an
+    /// external display in use there is none, and no other display may fold in its place.
     static func builtInScreen() -> NSScreen? {
-        NSScreen.screens.first { CGDisplayIsBuiltin(displayID(of: $0)) != 0 } ?? NSScreen.main
+        NSScreen.screens.first { CGDisplayIsBuiltin(displayID(of: $0)) != 0 }
     }
 
     static func displayID(of screen: NSScreen) -> CGDirectDisplayID {

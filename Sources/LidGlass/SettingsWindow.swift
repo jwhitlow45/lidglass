@@ -55,7 +55,8 @@ struct PreviewView: NSViewRepresentable {
         }
 
         private func loadStill() {
-            guard ScreenCaptureSource.hasPermission, let renderer, let screen = AppController.builtInScreen() else { return }
+            guard ScreenCaptureSource.hasPermission, let renderer,
+                  let screen = AppController.builtInScreen() ?? NSScreen.main else { return }
             let displayID = AppController.displayID(of: screen)
             Task { @MainActor in
                 do {
