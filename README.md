@@ -40,7 +40,7 @@ permission.
 
 ```sh
 build/LidGlass.app/Contents/MacOS/LidGlass --angle
-    # print the live lid angle; needs no permissions
+    # print the live lid angle, with no permissions needed
 
 build/LidGlass.app/Contents/MacOS/LidGlass --render desktop.png out.png 0.55 etched
     # render the glass over a still image at a given fold (0 to 1) and effect

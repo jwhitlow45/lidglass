@@ -21,7 +21,7 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
     private var lastFailure = -Double.infinity
     private static let retryDelay = 2.0
 
-    /// Frames arrive in this colour space, and the glass is drawn in it too, so the glass
+    /// Frames arrive in this color space, and the glass is drawn in it too, so the glass
     /// matches the screen exactly when it takes over. A MacBook display carries its own
     /// calibrated profile rather than a named space, and Display P3 is the named space
     /// closest to it.
@@ -132,7 +132,7 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
         }
     }
 
-    /// ScreenCaptureKit also delivers idle and blank frames; only complete ones carry pixels.
+    /// ScreenCaptureKit also delivers idle and blank frames. Only complete ones carry pixels.
     private func isFrameComplete(_ sampleBuffer: CMSampleBuffer) -> Bool {
         guard let attachments = CMSampleBufferGetSampleAttachmentsArray(sampleBuffer, createIfNecessary: false) as? [[SCStreamFrameInfo: Any]],
               let raw = attachments.first?[.status] as? Int,

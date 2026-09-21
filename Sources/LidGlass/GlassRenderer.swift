@@ -87,7 +87,7 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         let attachment = descriptor.colorAttachments[0]!
         attachment.pixelFormat = .bgra8Unorm
         attachment.isBlendingEnabled = true
-        // Premultiplied alpha: the shader already folds alpha into the colour.
+        // Premultiplied alpha: the shader already folds alpha into the color.
         attachment.sourceRGBBlendFactor = .one
         attachment.destinationRGBBlendFactor = .oneMinusSourceAlpha
         attachment.sourceAlphaBlendFactor = .one

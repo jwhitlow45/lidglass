@@ -33,7 +33,7 @@ struct Material {
     /// 0 for a smooth blur, 1 for sandblasted.
     var scatter: Float
     var sheen: Float
-    /// Colour split at the pane's edges at full frost, in captured pixels.
+    /// Color split at the pane's edges at full frost, in captured pixels.
     var chroma: Float
     var tint: (r: Float, g: Float, b: Float)
     var tintStrength: Float

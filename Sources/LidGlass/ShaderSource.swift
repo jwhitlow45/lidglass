@@ -106,13 +106,13 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     float grainB = hash21(cell.yx + 19.37);
 
     // Each pixel gathers a spiral of taps, and each tap reads a prefiltered mip, so a
-    // handful of taps covers a wide radius without blocky smearing. Scatter randomises the
+    // handful of taps covers a wide radius without blocky smearing. Scatter randomizes the
     // spiral's turn and reach per grain cell: none gives a smooth blur, full scatter gives
     // the sandblasted look of etched glass.
     float scatter = saturate(u.scatter);
     float radius = u.blurRadius * frostAmount * mix(1.0, grainB * 2.0, scatter);
     float lod = clamp(log2(max(radius, 1.0) / 2.0), 0.0, u.maxLod);
-    // Colour splits outward from the middle of the pane, like light through a prism.
+    // Color splits outward from the middle of the pane, like light through a prism.
     float2 shift = (in.uv - 0.5) * 2.0 * u.chroma * frostAmount * texel;
     float3 color;
     if (radius < 0.5) {
