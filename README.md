@@ -32,7 +32,7 @@ open build/LidGlass.app
 On first launch macOS asks for Screen Recording permission. Allow LidGlass in System
 Settings > Privacy & Security > Screen & System Audio Recording, then quit it from the
 menu bar icon and open it again. The first launch also takes the current lid angle as the
-resting angle.
+start angle.
 
 macOS ties the permission to how the app is signed. Signed with the local certificate, the
 permission survives rebuilds. Without it, `build-app.sh` signs ad-hoc, which ties the
