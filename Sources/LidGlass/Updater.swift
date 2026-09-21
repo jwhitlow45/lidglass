@@ -214,8 +214,14 @@ final class Updater {
         ditto.arguments = ["-x", "-k", archive.path, unpacked.path]
         try ditto.run()
         ditto.waitUntilExit()
-        let app = unpacked.appendingPathComponent(installedApp.lastPathComponent)
-        guard ditto.terminationStatus == 0, FileManager.default.fileExists(atPath: app.path) else {
+        // The archive must hold exactly one app, as a real folder. Its name does not matter,
+        // since the installed copy may have been renamed. A symbolic link could make the
+        // signature check read one bundle while the install moves another.
+        let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey]
+        let entries = (try? FileManager.default.contentsOfDirectory(at: unpacked, includingPropertiesForKeys: Array(keys))) ?? []
+        guard ditto.terminationStatus == 0, entries.count == 1, let app = entries.first, app.pathExtension == "app",
+              let values = try? app.resourceValues(forKeys: keys),
+              values.isDirectory == true, values.isSymbolicLink != true else {
             try? FileManager.default.removeItem(at: workspace)
             throw UpdateError.noAppInArchive
         }
