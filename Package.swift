@@ -16,11 +16,11 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         // The command line tools ship neither XCTest nor the Swift Testing macro plugin,
-        // so the checks are a plain executable: `swift run FoldModelChecks`.
+        // so the checks are a plain executable: `swift run LidGlassChecks`.
         .executableTarget(
-            name: "FoldModelChecks",
+            name: "LidGlassChecks",
             dependencies: ["LidGlassCore"],
-            path: "Sources/FoldModelChecks"
+            path: "Sources/LidGlassChecks"
         ),
     ]
 )

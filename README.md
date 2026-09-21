@@ -49,7 +49,7 @@ build/LidGlass.app/Contents/MacOS/LidGlass --angle
 build/LidGlass.app/Contents/MacOS/LidGlass --render desktop.png out.png 0.55 etched
     # render the glass over a still image at a given fold (0 to 1) and effect
 
-swift run FoldModelChecks
+swift run LidGlassChecks
     # checks for the angle-to-fold math
 ```
 
