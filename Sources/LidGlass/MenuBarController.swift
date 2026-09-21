@@ -7,12 +7,14 @@ final class MenuBarController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let settings = Settings.shared
     private let settingsWindow: SettingsWindowController
+    private let updater: Updater
     private let enabledItem = NSMenuItem(title: "Effect enabled", action: #selector(toggleEnabled), keyEquivalent: "")
     private var cancellables = Set<AnyCancellable>()
     private var shownAngle: Int?
 
-    init(controller: AppController, settingsWindow: SettingsWindowController) {
+    init(controller: AppController, settingsWindow: SettingsWindowController, updater: Updater) {
         self.settingsWindow = settingsWindow
+        self.updater = updater
 
         statusItem.button?.image = NSImage(systemSymbolName: "laptopcomputer", accessibilityDescription: "LidGlass")
         statusItem.button?.imagePosition = .imageLeading
@@ -33,6 +35,9 @@ final class MenuBarController {
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
+        let updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit LidGlass", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
@@ -66,6 +71,10 @@ final class MenuBarController {
 
     @objc private func toggleEnabled() {
         settings.isEnabled.toggle()
+    }
+
+    @objc private func checkForUpdates() {
+        updater.checkNow()
     }
 
     @objc private func openSettings() {

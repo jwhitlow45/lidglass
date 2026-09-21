@@ -2,14 +2,17 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let controller = AppController()
+    private let updater = Updater()
     private var menuBar: MenuBarController?
     private var settingsWindow: SettingsWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settingsWindow = SettingsWindowController(controller: controller)
         self.settingsWindow = settingsWindow
-        menuBar = MenuBarController(controller: controller, settingsWindow: settingsWindow)
+        menuBar = MenuBarController(controller: controller, settingsWindow: settingsWindow, updater: updater)
         controller.start()
+        updater.canRelaunchNow = { [weak controller] in controller?.isShowingGlass != true }
+        updater.start()
 
         // Test hook: hold the fold at a fixed amount so the effect can be inspected
         // without touching the lid.

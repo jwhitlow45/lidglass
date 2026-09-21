@@ -144,6 +144,10 @@ struct SettingsView: View {
                     switchRow("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
                     switchRow("Hide the system cursor while folded", isOn: $settings.hidesSystemCursor)
                     switchRow("Open at login", isOn: $settings.opensAtLogin)
+                    switchRow("Update automatically", isOn: $settings.updatesAutomatically)
+                    Text("Version \(Updater.installedVersion?.description ?? "unknown"). Updates come from the LidGlass releases on GitHub. Check any time from the menu bar.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(width: 420)

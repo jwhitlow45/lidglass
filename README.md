@@ -25,7 +25,7 @@ glass moves at the speed of your hand, holds when you pause, and retraces when y
 
 ```sh
 ./create-signing-identity.sh   # once: a local code signing certificate
-./build-app.sh                 # builds build/LidGlass.app
+./build-app.sh                 # builds build/LidGlass.app, at the version in VERSION
 open build/LidGlass.app
 ```
 
@@ -54,6 +54,8 @@ swift run LidGlassChecks
 ```
 
 Set `LIDGLASS_FORCE_FOLD=0.5` when launching the binary to hold the glass at a fixed fold.
+Set `LIDGLASS_UPDATE_FEED` to a release feed URL to test updates against something other
+than GitHub. The signature check still decides what installs.
 
 ## Settings
 
@@ -88,6 +90,18 @@ Open from the menu bar icon.
 The preview shows the material at the slider's fold. "Fold the screen with the slider"
 drives the real overlay from the slider instead of the lid. Escape, a click while the
 glass is showing, or switching to another window turns it off.
+
+## Updates
+
+With "Update automatically" on (the default), LidGlass checks its GitHub releases a minute
+after launch and every six hours. A newer release installs and relaunches LidGlass without
+asking, but never while the glass is showing. "Check for Updates…" in the menu bar checks at
+any time, whatever the setting, and asks before installing.
+
+An update installs only if its app is signed with the same certificate as the copy already
+installed. That is also what keeps Screen Recording permission across the update. A copy
+built without the certificate (signed ad-hoc) cannot verify an update, so it never installs
+one.
 
 ## How it works
 
