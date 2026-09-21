@@ -57,12 +57,21 @@ final class AppController {
         settings.$isEnabled
             .sink { [weak self] enabled in if !enabled { self?.shutDownEffect() } }
             .store(in: &cancellables)
-        // A published setting announces itself before it is stored, and tick() reads the
-        // stored values, so these ticks wait for the next turn of the main queue. The main
-        // queue, unlike a run loop timer, keeps running while a slider is dragged.
-        Publishers.Merge3(settings.$isSimulating.map { _ in () },
-                          settings.$simulationFold.map { _ in () },
-                          settings.$hidesSystemCursor.map { _ in () })
+        // A still lid sends no readings, so a setting that changes where the glass should be
+        // ticks the controller itself. A published setting announces itself before it is
+        // stored, and tick() reads the stored values, so these ticks wait for the next turn of
+        // the main queue. The main queue, unlike a run loop timer, keeps running while a
+        // slider is dragged.
+        let changesToTheGlass: [AnyPublisher<Void, Never>] = [
+            settings.$isEnabled.map { _ in () }.eraseToAnyPublisher(),
+            settings.$isSimulating.map { _ in () }.eraseToAnyPublisher(),
+            settings.$simulationFold.map { _ in () }.eraseToAnyPublisher(),
+            settings.$startAngle.map { _ in () }.eraseToAnyPublisher(),
+            settings.$hingeSensitivity.map { _ in () }.eraseToAnyPublisher(),
+            settings.$minimumMovement.map { _ in () }.eraseToAnyPublisher(),
+            settings.$hidesSystemCursor.map { _ in () }.eraseToAnyPublisher(),
+        ]
+        Publishers.MergeMany(changesToTheGlass)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.tick() }
             .store(in: &cancellables)
