@@ -26,6 +26,11 @@ final class AppController {
     private var lastMovementTime = 0.0
     /// Mirrors what the sensor was last told, so a tick only reaches it on a change.
     private var sensorIsTracking = false
+    /// Whether the glass should be on screen. The window trails this by a frame or two in
+    /// each direction, see reveal and conceal.
+    private var isGlassUp = false
+    /// Bumped by every reveal and conceal, so a delayed step of an older one does nothing.
+    private var glassChange = 0
     private var fallbackTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
@@ -85,7 +90,7 @@ final class AppController {
     var currentFold: Double { renderer?.fold ?? 0 }
 
     /// True while the glass covers the screen.
-    var isShowingGlass: Bool { window?.isVisible == true }
+    var isShowingGlass: Bool { isGlassUp }
 
     func useCurrentAngleAsStart() {
         if let angle = sensor.readAngle() { settings.startAngle = angle }
@@ -156,29 +161,49 @@ final class AppController {
         if shouldShow {
             view.preferredFramesPerSecond = frameRate
             view.isPaused = false
-            if !window.isVisible { reveal(window, drawnBy: renderer) }
+            if !isGlassUp { reveal(window, drawnBy: renderer) }
             if settings.hidesSystemCursor { cursor.hide() } else { cursor.show() }
         } else {
             view.isPaused = true
-            if window.isVisible { window.orderOut(nil) }
+            if isGlassUp { conceal(window) }
             cursor.show()
         }
     }
 
-    /// The window's layer still holds the last frame of the previous fold until it draws
-    /// again, and showing that for even one refresh flashes old content across the whole
-    /// screen. So the window comes up invisible and turns visible once its first new frame
-    /// is on screen. The timeout covers a frame that never reports being shown.
+    /// The glass window only enters and leaves the screen while fully transparent. A
+    /// full-screen window appearing or disappearing while visible flashes the whole screen,
+    /// and a window just brought back still shows the last frame of the previous fold until
+    /// it draws again. So it turns visible once its first new frame is on screen, and turns
+    /// transparent a few frames before it is removed.
     private func reveal(_ window: OverlayWindow, drawnBy renderer: GlassRenderer?) {
+        isGlassUp = true
+        glassChange += 1
+        let change = glassChange
         window.alphaValue = 0
-        renderer?.onNextPresent = { [weak window] in window?.alphaValue = 1 }
         window.orderFrontRegardless()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak window] in
-            if window?.isVisible == true { window?.alphaValue = 1 }
+        let turnVisible = { [weak self, weak window] in
+            guard self?.glassChange == change else { return }
+            window?.alphaValue = 1
+        }
+        renderer?.onNextPresent = turnVisible
+        // Covers a frame that never reports being shown.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: turnVisible)
+    }
+
+    private func conceal(_ window: OverlayWindow) {
+        isGlassUp = false
+        glassChange += 1
+        let change = glassChange
+        window.alphaValue = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak window] in
+            guard self?.glassChange == change else { return }
+            window?.orderOut(nil)
         }
     }
 
     private func shutDownEffect() {
+        isGlassUp = false
+        glassChange += 1
         cursor.show()
         capture?.stop()
         renderer?.dropFrames()
