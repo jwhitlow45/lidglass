@@ -103,6 +103,12 @@ installed. That is also what keeps Screen Recording permission across the update
 built without the certificate (signed ad-hoc) cannot verify an update, so it never installs
 one.
 
+To publish a release, set the new version in `VERSION`, commit, and run:
+
+```sh
+./release.sh   # builds, checks the signature, and publishes vVERSION with LidGlass.zip
+```
+
 ## How it works
 
 - `LidAngleSensor` reads HID feature report 1 from the `las` device. The angle is a
