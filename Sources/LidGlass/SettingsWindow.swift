@@ -326,6 +326,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     }
 
     func show() {
+        Settings.shared.refreshLoginItemStatus()
         if window == nil {
             let hosting = NSHostingController(rootView: SettingsView(controller: controller))
             let window = NSWindow(contentViewController: hosting)

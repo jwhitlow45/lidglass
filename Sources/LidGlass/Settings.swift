@@ -97,7 +97,7 @@ final class Settings: ObservableObject {
     @Published var simulationFold = 0.5
 
     /// Mirrors the login item registration so the toggle can drive it directly.
-    @Published var opensAtLogin: Bool { didSet { applyLoginItem() } }
+    @Published var opensAtLogin: Bool { didSet { if !isShowingLoginItemStatus { applyLoginItem() } } }
 
     var simulatedFold: Double? { isSimulating ? simulationFold : nil }
 
@@ -142,16 +142,35 @@ final class Settings: ObservableObject {
         opensAtLogin = SMAppService.mainApp.status == .enabled
     }
 
+    /// Set while the toggle is being corrected to the real status, so the correction does
+    /// not register or unregister the login item again.
+    private var isShowingLoginItemStatus = false
+
     private func applyLoginItem() {
+        let service = SMAppService.mainApp
         do {
             if opensAtLogin {
-                try SMAppService.mainApp.register()
+                try service.register()
             } else {
-                try SMAppService.mainApp.unregister()
+                try service.unregister()
             }
         } catch {
             NSLog("LidGlass: login item change failed: \(error)")
         }
+        // macOS can hold a new login item until the person approves it, so send them to
+        // where they approve it.
+        if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
+        refreshLoginItemStatus()
+    }
+
+    /// Shows whether LidGlass will actually open at login, which may differ from what was
+    /// last asked for: registering can fail, and approval can change in System Settings.
+    func refreshLoginItemStatus() {
+        let isEnabled = SMAppService.mainApp.status == .enabled
+        guard isEnabled != opensAtLogin else { return }
+        isShowingLoginItemStatus = true
+        opensAtLogin = isEnabled
+        isShowingLoginItemStatus = false
     }
 
     private func store(_ value: Any, _ key: String) {
