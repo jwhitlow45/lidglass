@@ -8,7 +8,7 @@ struct Uniforms {
     float theta;
     float perspective;
     float progress;
-    float frost;
+    float strength;
 
     float frostTop;
     float frostBottom;
@@ -95,7 +95,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     float fromHinge = u.hingeAtTop > 0.5 ? in.uv.y : 1.0 - in.uv.y;
     // Full frost by about a third of the way closed, so a partly closed lid already shows
     // the material rather than a faint version of it.
-    float frostAmount = u.frost * smoothstep(0.0, 0.35, u.progress) * mix(u.frostBottom, u.frostTop, fromHinge);
+    float frostAmount = u.strength * smoothstep(0.0, 0.35, u.progress) * mix(u.frostBottom, u.frostTop, fromHinge);
 
     float2 pixel = in.uv * float2(u.texWidth, u.texHeight);
     float2 texel = float2(1.0 / u.texWidth, 1.0 / u.texHeight);
@@ -130,11 +130,11 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
 
     color += (grain - 0.5) * u.grainStrength * frostAmount;
     color = mix(color, float3(u.tintR, u.tintG, u.tintB), u.tintStrength * frostAmount);
-    color += u.sheen * sin(u.theta) * smoothstep(0.0, 1.0, fromHinge);
+    color += u.strength * u.sheen * sin(u.theta) * smoothstep(0.0, 1.0, fromHinge);
     // A glossy band of reflected light, slanted across the pane, that sweeps from the free
     // edge toward the hinge as the pane tips back.
     float band = fromHinge - (1.0 - u.progress) + (in.uv.x - 0.5) * 0.3;
-    color += u.gloss * sin(u.theta) * exp(-band * band * 70.0);
+    color += u.strength * u.gloss * sin(u.theta) * exp(-band * band * 70.0);
 
     // Rounded rect mask, measured in captured pixels so the radius matches the display.
     float2 halfSize = float2(u.texWidth, u.texHeight) * 0.5;
@@ -143,7 +143,8 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - cornerRadius;
     float mask = saturate(0.5 - dist / max(u.edgeSoftness, 0.5));
 
-    float alpha = mask * mix(1.0, u.paneAlpha, u.progress);
+    // Strength scales everything the effect adds, so at zero every effect is the bare fold.
+    float alpha = mask * mix(1.0, u.paneAlpha, u.progress * u.strength);
     return float4(saturate(color) * alpha, alpha);
 }
 """#

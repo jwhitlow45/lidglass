@@ -9,7 +9,7 @@ struct Uniforms {
     var theta: Float = 0
     var perspective: Float = 6
     var progress: Float = 0
-    var frost: Float = 0.8
+    var strength: Float = 0.8
 
     var frostTop: Float = 1
     var frostBottom: Float = 0.2
@@ -225,7 +225,7 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         // A near camera exaggerates the fold, a far one flattens it.
         u.perspective = Float(2.2 + (1 - settings.perspective) * 12)
         u.progress = Float(fold)
-        u.frost = Float(settings.frost)
+        u.strength = Float(settings.strength)
         u.frostTop = material.frostTop
         u.frostBottom = material.frostBottom
         u.grainScale = material.grainScale

@@ -60,7 +60,8 @@ Open from the menu bar icon.
   Frost reaches full strength about a third of the way closed.
 - **Hinge edge**: the glass folds on the bottom edge of the screen, like the lid, or on the
   top edge. Frost grows toward the edge that swings away.
-- **Frost**, **Perspective**, **Edge softness**, **Corner radius**
+- **Strength**: how strongly the effect shows, from none (just the fold) to full
+- **Perspective**, **Edge softness**, **Corner radius**
 - **Responsiveness**: how tightly the glass tracks the lid
 - **Hinge sensitivity**: fold per degree of lid travel
 - **Minimum movement**: degrees the lid has to move before the glass responds. The

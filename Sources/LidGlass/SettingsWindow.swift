@@ -111,7 +111,7 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
-                    slider("Frost", value: $settings.frost, range: 0...1, step: 0.01)
+                    slider("Strength", value: $settings.strength, range: 0...1, step: 0.01)
                     slider("Perspective", value: $settings.perspective, range: 0...1, step: 0.01)
                     slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, step: 0.5, unit: "px")
                     slider("Corner radius", value: $settings.cornerRadius, range: 0...120, step: 1, unit: "px")

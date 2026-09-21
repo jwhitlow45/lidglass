@@ -76,7 +76,9 @@ final class Settings: ObservableObject {
     @Published var isEnabled: Bool { didSet { store(isEnabled, "isEnabled") } }
     @Published var effect: GlassEffect { didSet { store(effect.rawValue, "effect") } }
     @Published var hingeEdge: HingeEdge { didSet { store(hingeEdge.rawValue, "hingeEdge") } }
-    @Published var frost: Double { didSet { store(frost, "frost") } }
+    /// How strongly the effect shows, from none (just the fold) to full. Stored under its
+    /// first name, frost, so a saved value carries over.
+    @Published var strength: Double { didSet { store(strength, "frost") } }
     @Published var perspective: Double { didSet { store(perspective, "perspective") } }
     @Published var edgeSoftness: Double { didSet { store(edgeSoftness, "edgeSoftness") } }
     @Published var cornerRadius: Double { didSet { store(cornerRadius, "cornerRadius") } }
@@ -125,7 +127,7 @@ final class Settings: ObservableObject {
         isEnabled = d.bool(forKey: "isEnabled")
         effect = GlassEffect(rawValue: d.string(forKey: "effect") ?? "") ?? .frosted
         hingeEdge = HingeEdge(rawValue: d.string(forKey: "hingeEdge") ?? "") ?? .bottom
-        frost = d.double(forKey: "frost")
+        strength = d.double(forKey: "frost")
         perspective = d.double(forKey: "perspective")
         edgeSoftness = d.double(forKey: "edgeSoftness")
         cornerRadius = d.double(forKey: "cornerRadius")
