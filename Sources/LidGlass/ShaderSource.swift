@@ -87,8 +87,9 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     constexpr sampler smp(filter::linear, mip_filter::linear, address::clamp_to_edge);
 
     if (u.isBackground > 0.5) {
-        // Opaque early so the real desktop never shows as a second image behind the pane.
-        return float4(0.0, 0.0, 0.0, smoothstep(0.0, 0.15, u.progress));
+        // Opaque from the first moment the glass shows. Any see-through lets the real screen,
+        // menu bar and all, show as a second copy in the gap the tilting pane opens.
+        return float4(0.0, 0.0, 0.0, 1.0);
     }
 
     // 0 along the hinge, 1 along the free edge: frost and sheen grow toward the free edge.
