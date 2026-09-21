@@ -162,7 +162,10 @@ final class AppController {
             view.preferredFramesPerSecond = frameRate
             view.isPaused = false
             if !isGlassUp { reveal(window, drawnBy: renderer) }
-            if settings.hidesSystemCursor { cursor.hide() } else { cursor.show() }
+            // Hiding is global, but the glass covers only the built-in display. A pointer on
+            // another display has no captured copy, so it stays visible there.
+            let isPointerOnGlass = window.frame.contains(NSEvent.mouseLocation)
+            if settings.hidesSystemCursor && isPointerOnGlass { cursor.hide() } else { cursor.show() }
         } else {
             view.isPaused = true
             if isGlassUp { conceal(window) }
