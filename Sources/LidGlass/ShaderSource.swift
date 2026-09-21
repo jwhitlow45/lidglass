@@ -58,12 +58,14 @@ vertex VertexOut glassVertex(uint vid [[vertex_id]], constant Uniforms &u [[buff
         return out;
     }
 
-    // Tip the pane about the hinge, then divide by depth so the far edge narrows.
+    // Tip the pane about the hinge. Depth goes in w rather than being divided out here:
+    // the GPU then divides by it itself and maps the texture perspective-correctly.
+    // Dividing here leaves each of the quad's two triangles mapped flat, and the image
+    // kinks along the diagonal where they meet.
     float hinged = corner.y + 1.0;
     float y = -1.0 + hinged * cos(u.theta);
     float depth = hinged * sin(u.theta);
-    float scale = u.perspective / (u.perspective + depth);
-    out.position = float4(corner.x * scale, y * scale, 0.0, 1.0);
+    out.position = float4(corner.x, y, 0.0, (u.perspective + depth) / u.perspective);
     return out;
 }
 
