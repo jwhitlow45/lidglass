@@ -34,6 +34,8 @@ struct Uniforms {
     float maxLod;
     float isBackground;
     float hingeAtTop;
+    float gloss;
+    float pad;
 };
 
 struct VertexOut {
@@ -71,7 +73,7 @@ vertex VertexOut glassVertex(uint vid [[vertex_id]], constant Uniforms &u [[buff
 }
 
 static float3 tap(texture2d<float> src, sampler smp, float2 uv, float lod, float2 shift) {
-    if (shift.x == 0.0) {
+    if (all(shift == 0.0)) {
         return src.sample(smp, uv, level(lod)).rgb;
     }
     return float3(src.sample(smp, uv + shift, level(lod)).r,
@@ -91,19 +93,26 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
 
     // 0 along the hinge, 1 along the free edge: frost and sheen grow toward the free edge.
     float fromHinge = u.hingeAtTop > 0.5 ? in.uv.y : 1.0 - in.uv.y;
-    float frostAmount = saturate(u.frost * u.progress) * mix(u.frostBottom, u.frostTop, fromHinge);
+    // Full frost by about a third of the way closed, so a partly closed lid already shows
+    // the material rather than a faint version of it.
+    float frostAmount = u.frost * smoothstep(0.0, 0.35, u.progress) * mix(u.frostBottom, u.frostTop, fromHinge);
 
     float2 pixel = in.uv * float2(u.texWidth, u.texHeight);
     float2 texel = float2(1.0 / u.texWidth, 1.0 / u.texHeight);
-    float grain = hash21(pixel / max(u.grainScale, 0.5));
-    float grainB = hash21(pixel.yx / max(u.grainScale, 0.5) + 19.37);
+    // Grain comes in cells of grainScale pixels, so it stays visible on a Retina display.
+    float2 cell = floor(pixel / max(u.grainScale, 1.0));
+    float grain = hash21(cell);
+    float grainB = hash21(cell.yx + 19.37);
 
-    // Etched glass scatters light: each pixel gathers a spiral of taps whose rotation
-    // and reach are randomised by the grain, and each tap reads a prefiltered mip so a
-    // handful of taps covers a wide radius without blocky smearing.
-    float radius = u.blurRadius * frostAmount * mix(1.0, grainB * 2.0, saturate(u.scatter));
-    float lod = min(max(log2(max(radius, 1.0) / 3.0), 0.0), u.maxLod);
-    float2 shift = float2(u.chroma * frostAmount * texel.x * (1.0 + lod * 2.0), 0.0);
+    // Each pixel gathers a spiral of taps, and each tap reads a prefiltered mip, so a
+    // handful of taps covers a wide radius without blocky smearing. Scatter randomises the
+    // spiral's turn and reach per grain cell: none gives a smooth blur, full scatter gives
+    // the sandblasted look of etched glass.
+    float scatter = saturate(u.scatter);
+    float radius = u.blurRadius * frostAmount * mix(1.0, grainB * 2.0, scatter);
+    float lod = clamp(log2(max(radius, 1.0) / 2.0), 0.0, u.maxLod);
+    // Colour splits outward from the middle of the pane, like light through a prism.
+    float2 shift = (in.uv - 0.5) * 2.0 * u.chroma * frostAmount * texel;
     float3 color;
     if (radius < 0.5) {
         color = tap(src, smp, in.uv, 0.0, shift);
@@ -112,7 +121,7 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
         float3 sum = float3(0.0);
         for (int i = 0; i < taps; i++) {
             float t = (float(i) + 0.5) / float(taps);
-            float a = grain * 6.2831853 + float(i) * 2.3999632;
+            float a = grain * 6.2831853 * scatter + float(i) * 2.3999632;
             float2 offset = float2(cos(a), sin(a)) * sqrt(t) * radius * texel;
             sum += tap(src, smp, in.uv + offset, lod, shift);
         }
@@ -122,6 +131,10 @@ fragment float4 glassFragment(VertexOut in [[stage_in]],
     color += (grain - 0.5) * u.grainStrength * frostAmount;
     color = mix(color, float3(u.tintR, u.tintG, u.tintB), u.tintStrength * frostAmount);
     color += u.sheen * sin(u.theta) * smoothstep(0.0, 1.0, fromHinge);
+    // A glossy band of reflected light, slanted across the pane, that sweeps from the free
+    // edge toward the hinge as the pane tips back.
+    float band = fromHinge - (1.0 - u.progress) + (in.uv.x - 0.5) * 0.3;
+    color += u.gloss * sin(u.theta) * exp(-band * band * 70.0);
 
     // Rounded rect mask, measured in captured pixels so the radius matches the display.
     float2 halfSize = float2(u.texWidth, u.texHeight) * 0.5;

@@ -35,6 +35,8 @@ struct Uniforms {
     var maxLod: Float = 6
     var isBackground: Float = 0
     var hingeAtTop: Float = 0
+    var gloss: Float = 0
+    var pad: Float = 0
 }
 
 /// Draws the captured display as a pane of glass tipping away on the lid's hinge.
@@ -244,6 +246,7 @@ final class GlassRenderer: NSObject, MTKViewDelegate {
         u.tintStrength = material.tintStrength
         u.maxLod = Float(mipLevels - 1)
         u.hingeAtTop = settings.hingeEdge == .top ? 1 : 0
+        u.gloss = material.gloss
         return u
     }
 }

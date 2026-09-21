@@ -24,39 +24,49 @@ enum HingeEdge: String, CaseIterable, Identifiable {
 /// Per-effect material constants. A mapped type keeps every effect answerable: adding a
 /// case to GlassEffect without a material here is a compile error.
 struct Material {
+    /// Frost at the free edge and at the hinge, as a share of the Frost setting.
     var frostTop: Float
     var frostBottom: Float
+    /// Size of a grain cell, in captured pixels.
     var grainScale: Float
     var grainStrength: Float
+    /// 0 for a smooth blur, 1 for sandblasted.
     var scatter: Float
     var sheen: Float
+    /// Colour split at the pane's edges at full frost, in captured pixels.
     var chroma: Float
     var tint: (r: Float, g: Float, b: Float)
     var tintStrength: Float
     var paneAlpha: Float
     /// Scatter reach in pixels at full frost.
     var blurRadius: Float
+    /// Strength of the reflected band of light.
+    var gloss: Float
 }
 
 let materials: [GlassEffect: Material] = [
-    .frosted: Material(frostTop: 1.0, frostBottom: 0.2, grainScale: 1.5, grainStrength: 0.05,
-                       scatter: 0.5, sheen: 0.05, chroma: 0, tint: (0.93, 0.96, 1.0), tintStrength: 0.2,
-                       paneAlpha: 1.0, blurRadius: 44),
-    .etched: Material(frostTop: 0.9, frostBottom: 0.15, grainScale: 1.0, grainStrength: 0.12,
-                      scatter: 1.0, sheen: 0.09, chroma: 0, tint: (0.96, 0.97, 0.99), tintStrength: 0.15,
-                      paneAlpha: 1.0, blurRadius: 30),
-    .ghost: Material(frostTop: 1.0, frostBottom: 0.45, grainScale: 2.0, grainStrength: 0.03,
+    // A smooth, even blur.
+    .frosted: Material(frostTop: 1.0, frostBottom: 0.3, grainScale: 1, grainStrength: 0,
+                       scatter: 0, sheen: 0.05, chroma: 0, tint: (0.93, 0.96, 1.0), tintStrength: 0.2,
+                       paneAlpha: 1.0, blurRadius: 56, gloss: 0),
+    // Visible sandblasted grain over a lighter blur.
+    .etched: Material(frostTop: 1.0, frostBottom: 0.25, grainScale: 2, grainStrength: 0.14,
+                      scatter: 1.0, sheen: 0.08, chroma: 0, tint: (0.96, 0.97, 0.99), tintStrength: 0.18,
+                      paneAlpha: 1.0, blurRadius: 22, gloss: 0),
+    .ghost: Material(frostTop: 1.0, frostBottom: 0.45, grainScale: 1, grainStrength: 0.03,
                      scatter: 0.4, sheen: 0.04, chroma: 0, tint: (1.0, 1.0, 1.0), tintStrength: 0.3,
-                     paneAlpha: 0.45, blurRadius: 56),
-    .smoke: Material(frostTop: 1.0, frostBottom: 0.4, grainScale: 1.5, grainStrength: 0.06,
+                     paneAlpha: 0.45, blurRadius: 56, gloss: 0),
+    .smoke: Material(frostTop: 1.0, frostBottom: 0.4, grainScale: 1, grainStrength: 0.06,
                      scatter: 0.6, sheen: 0.03, chroma: 0, tint: (0.16, 0.17, 0.2), tintStrength: 0.4,
-                     paneAlpha: 0.92, blurRadius: 48),
-    .prism: Material(frostTop: 0.8, frostBottom: 0.15, grainScale: 1.5, grainStrength: 0.04,
-                     scatter: 0.5, sheen: 0.08, chroma: 6, tint: (0.95, 0.95, 1.0), tintStrength: 0.1,
-                     paneAlpha: 1.0, blurRadius: 32),
-    .clear: Material(frostTop: 0.35, frostBottom: 0.05, grainScale: 2.0, grainStrength: 0.02,
-                     scatter: 0.3, sheen: 0.12, chroma: 0, tint: (0.97, 0.99, 1.0), tintStrength: 0.08,
-                     paneAlpha: 1.0, blurRadius: 16),
+                     paneAlpha: 0.92, blurRadius: 48, gloss: 0),
+    // Strong rainbow edges over a light blur.
+    .prism: Material(frostTop: 0.8, frostBottom: 0.15, grainScale: 1.5, grainStrength: 0.02,
+                     scatter: 0.3, sheen: 0.08, chroma: 36, tint: (0.95, 0.95, 1.0), tintStrength: 0.08,
+                     paneAlpha: 1.0, blurRadius: 14, gloss: 0),
+    // No frost: the fold and a glossy highlight.
+    .clear: Material(frostTop: 0, frostBottom: 0, grainScale: 1, grainStrength: 0,
+                     scatter: 0, sheen: 0.04, chroma: 0, tint: (1.0, 1.0, 1.0), tintStrength: 0,
+                     paneAlpha: 1.0, blurRadius: 0, gloss: 0.6),
 ]
 
 /// User-facing settings, mirrored into UserDefaults so they survive a relaunch.

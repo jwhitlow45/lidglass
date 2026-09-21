@@ -55,7 +55,9 @@ Set `LIDGLASS_FORCE_FOLD=0.5` when launching the binary to hold the glass at a f
 
 Open from the menu bar icon.
 
-- **Effect**: Frosted, Etched, Ghost, Smoke, Prism, Clear
+- **Effect**: Frosted (a smooth blur), Etched (sandblasted grain), Ghost (a see-through
+  pane), Smoke (a dark tint), Prism (rainbow edges), Clear (no frost, a glossy highlight).
+  Frost reaches full strength about a third of the way closed.
 - **Hinge edge**: the glass folds on the bottom edge of the screen, like the lid, or on the
   top edge. Frost grows toward the edge that swings away.
 - **Frost**, **Perspective**, **Edge softness**, **Corner radius**
