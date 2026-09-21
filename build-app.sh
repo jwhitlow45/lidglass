@@ -10,6 +10,10 @@ BUNDLE_ID="local.lidglass"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)/LidGlass"
 
+# Ad-hoc signatures tie Screen Recording permission to the exact binary, so a grant made
+# for an earlier build no longer matches after a code change. Keep the old hash to tell.
+OLD_CDHASH="$(codesign -dvvv "$APP" 2>&1 | awk -F= '/^CDHash=/{print $2}' || true)"
+
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/LidGlass"
@@ -34,3 +38,12 @@ PLIST
 
 codesign --force --sign - --identifier "$BUNDLE_ID" "$APP" >/dev/null
 echo "built $APP"
+
+NEW_CDHASH="$(codesign -dvvv "$APP" 2>&1 | awk -F= '/^CDHash=/{print $2}')"
+if [ -n "$OLD_CDHASH" ] && [ "$OLD_CDHASH" != "$NEW_CDHASH" ]; then
+    # System Settings would keep showing the stale grant as on while it no longer applies.
+    # tccutil finds the app through Launch Services, which has not seen the new bundle yet.
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
+    tccutil reset ScreenCapture "$BUNDLE_ID" >/dev/null
+    echo "binary changed: Screen Recording permission reset, reopen LidGlass and allow it again"
+fi

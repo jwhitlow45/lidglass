@@ -34,7 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         alert.messageText = "LidGlass needs Screen Recording permission"
         alert.informativeText = """
         The glass is your own screen, so the app has to read it to redraw it. \
-        Allow LidGlass in System Settings, Privacy & Security, Screen & System Audio Recording, then relaunch.
+        Allow LidGlass in System Settings, Privacy & Security, Screen & System Audio Recording, then reopen it.
+
+        If LidGlass is already on there, that permission belongs to an older build. \
+        Remove it with the minus button, then reopen LidGlass and allow it again.
         """
         alert.addButton(withTitle: "Open System Settings")
         alert.addButton(withTitle: "Later")

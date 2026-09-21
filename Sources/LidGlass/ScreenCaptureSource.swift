@@ -92,8 +92,10 @@ final class ScreenCaptureSource: NSObject, SCStreamOutput, SCStreamDelegate {
 
     /// Our own overlay shows the captured frames, so capturing it back would feed the
     /// image into itself. Excluding the whole app also keeps the settings window out.
+    /// Off-screen windows count: the overlay is hidden when the stream starts, and an app
+    /// with no on-screen windows is missing from the list and so escapes the exclusion.
     private func makeFilter() async throws -> SCContentFilter {
-        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
         guard let display = content.displays.first(where: { $0.displayID == displayID }) else {
             throw CaptureError.displayGone
         }

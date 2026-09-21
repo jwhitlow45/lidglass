@@ -18,6 +18,15 @@ final class MenuBarController {
         statusItem.button?.imagePosition = .imageLeading
 
         let menu = NSMenu()
+        // Permission only takes effect on relaunch, so checking once per launch is enough.
+        if !ScreenCaptureSource.hasPermission {
+            let permissionItem = NSMenuItem(title: "Screen Recording not allowed…", action: #selector(openScreenRecordingSettings), keyEquivalent: "")
+            permissionItem.target = self
+            permissionItem.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
+            menu.addItem(permissionItem)
+            menu.addItem(.separator())
+            statusItem.button?.image = NSImage(systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "LidGlass needs Screen Recording")
+        }
         enabledItem.target = self
         menu.addItem(enabledItem)
         menu.addItem(.separator())
@@ -51,5 +60,11 @@ final class MenuBarController {
 
     @objc private func openSettings() {
         settingsWindow.show()
+    }
+
+    @objc private func openScreenRecordingSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+            NSWorkspace.shared.open(url)
+        }
     }
 }
