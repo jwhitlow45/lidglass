@@ -98,8 +98,8 @@ struct SettingsView: View {
             }
             .frame(width: 320)
 
-            Form {
-                Section("Material") {
+            VStack(alignment: .leading, spacing: 14) {
+                section("Material") {
                     Picker("Effect", selection: $settings.effect) {
                         ForEach(GlassEffect.allCases) { Text($0.rawValue).tag($0) }
                     }
@@ -108,34 +108,31 @@ struct SettingsView: View {
                     slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, unit: "px")
                     slider("Corner radius", value: $settings.cornerRadius, range: 0...120, unit: "px")
                 }
-                Section("Feel") {
+                section("Feel") {
                     slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1)
                     slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3)
                     slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, unit: "°")
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            slider("Start angle", value: $settings.startAngle, range: 30...160, unit: "°")
-                            Button("Use current") { controller.useCurrentAngleAsStart() }
-                                .disabled(!controller.sensorIsAvailable)
-                        }
-                        Text("The glass starts folding as the lid closes past this angle.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    HStack {
+                        slider("Start angle", value: $settings.startAngle, range: 30...160, unit: "°")
+                        Button("Use current") { controller.useCurrentAngleAsStart() }
+                            .disabled(!controller.sensorIsAvailable)
                     }
+                    Text("The glass starts folding as the lid closes past this angle.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Section("Power") {
+                section("Power") {
                     Picker("Stationary frame rate", selection: $settings.stationaryFrameRate) {
                         ForEach([15, 30, 60, 90, 120], id: \.self) { Text("\($0) FPS").tag($0) }
                     }
                 }
-                Section("App") {
-                    Toggle("Effect enabled", isOn: $settings.isEnabled)
-                    Toggle("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
-                    Toggle("Open at login", isOn: $settings.opensAtLogin)
+                section("App") {
+                    switchRow("Effect enabled", isOn: $settings.isEnabled)
+                    switchRow("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
+                    switchRow("Open at login", isOn: $settings.opensAtLogin)
                 }
             }
-            .formStyle(.grouped)
-            .frame(width: 380)
+            .frame(width: 420)
         }
         .padding(18)
         .onDisappear { settings.isSimulating = false }
@@ -148,10 +145,31 @@ struct SettingsView: View {
         return String(format: "Lid angle sensor: %.0f°", controller.currentAngle)
     }
 
+    /// Plain boxes rather than a grouped Form: a Form makes every row a focus stop of its
+    /// own, and the arrow keys then move between rows instead of moving the row's slider.
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.headline)
+            VStack(alignment: .leading, spacing: 8) { content() }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.quaternary.opacity(0.6)))
+        }
+    }
+
+    private func switchRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            Text(title).frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .toggleStyle(.switch)
+    }
+
     private func slider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, unit: String = "") -> some View {
         HStack {
             Text(title)
-            Slider(value: value, in: range)
+                .frame(width: 130, alignment: .leading)
+            Slider(value: value, in: range) { Text(title) }
+                .labelsHidden()
             Text(unit.isEmpty ? String(format: "%.2f", value.wrappedValue) : String(format: "%.0f%@", value.wrappedValue, unit))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
@@ -175,11 +193,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingController(rootView: SettingsView(controller: controller))
             let window = NSWindow(contentViewController: hosting)
             window.title = "LidGlass"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.styleMask = [.titled, .closable, .miniaturizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
-            // A grouped form scrolls, so left to itself the window takes the preview
-            // column's height and hides every section below the first.
             window.setContentSize(hosting.view.fittingSize)
             window.center()
             self.window = window
