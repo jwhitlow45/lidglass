@@ -287,7 +287,28 @@ final class LockScreenController {
     /// for a landscape screen. Loaded as is, that stretches the whole image, corners
     /// included, into an oval.
     private static func fillImage(at url: URL, width: Int, height: Int) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let sourceWidth = properties[kCGImagePropertyPixelWidth] as? CGFloat,
+              let sourceHeight = properties[kCGImagePropertyPixelHeight] as? CGFloat,
+              sourceWidth > 0, sourceHeight > 0 else { return nil }
+        // A sideways-swapped orientation (a portrait photo stored rotated 90 degrees, say)
+        // swaps which raw pixel dimension is the oriented width versus height, which the
+        // fill scale below needs to get right, since the file's own width and height alone
+        // do not say which edge is actually the long one once display-oriented.
+        let rawOrientation = properties[kCGImagePropertyOrientation] as? UInt32 ?? 1
+        let isSwapped = CGImagePropertyOrientation(rawValue: rawOrientation).map { orientation in
+            [.left, .leftMirrored, .right, .rightMirrored].contains(orientation)
+        } ?? false
+        let orientedWidth = isSwapped ? sourceHeight : sourceWidth
+        let orientedHeight = isSwapped ? sourceWidth : sourceHeight
+        // The same "cover, then crop" scale the final image is fit with below, computed
+        // against the source's own resolution: a max pixel size derived from the target
+        // screen alone, ignoring the source's aspect ratio, can ask for a thumbnail smaller
+        // than what filling the screen actually needs, then this function's own crop
+        // upscales that undersized thumbnail rather than the original file's real detail.
+        let fillScale = max(CGFloat(width) / orientedWidth, CGFloat(height) / orientedHeight)
+        let longestEdge = Int((max(orientedWidth, orientedHeight) * fillScale).rounded(.up))
         // Applies EXIF orientation (a portrait photo stored sideways with rotation metadata,
         // say) before any of the math below runs, rather than trusting the file's raw,
         // possibly-rotated pixel grid: unapplied, both the crop and the final image would
@@ -295,7 +316,7 @@ final class LockScreenController {
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(width, height),
+            kCGImageSourceThumbnailMaxPixelSize: longestEdge,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else { return nil }
         let imageWidth = CGFloat(image.width), imageHeight = CGFloat(image.height)
@@ -327,13 +348,17 @@ final class LockScreenController {
         if visible {
             window.alphaValue = 0
             window.orderFrontRegardless()
-            let turnVisible = { [weak self, weak window] in
+            // No timed fallback: this window is reused across folds within one lock
+            // session, so its drawable can still hold an earlier, superseded wallpaper
+            // until a real frame presents the one just validated. Forcing it visible on a
+            // guess, the way the normal overlay's identical-looking reveal does, would risk
+            // showing that leftover frame instead. Leaving it transparent until a frame
+            // genuinely presents is a purely cosmetic worst case (the glass just never
+            // appears for that fold), not a wrong one.
+            renderer?.onNextPresent = { [weak self, weak window] in
                 guard self?.revealChange == change else { return }
                 window?.alphaValue = 1
             }
-            renderer?.onNextPresent = turnVisible
-            // Covers a frame that never reports being shown.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: turnVisible)
             startSelfTicking()
         } else {
             window.alphaValue = 0
@@ -349,10 +374,15 @@ final class LockScreenController {
     /// Marks any cached wallpaper, and any reload still in flight, as no longer good enough
     /// to show without being validated again: the next reveal, even a later one in the same
     /// lock session, or a load that was already on its way when this ran, must not act as
-    /// though it is still current.
+    /// though it is still current. Also clears the busy flag: bumping the generation here is
+    /// what makes any in-flight load's own completion take the stale, do-nothing path
+    /// (checked first, before that completion would otherwise clear the flag itself), so
+    /// nothing else is ever going to clear it. Left set, a cancelled load would block every
+    /// later reload from ever starting again.
     private func invalidateWallpaper() {
         hasFreshWallpaper = false
         wallpaperGeneration += 1
+        isReloadingWallpaper = false
     }
 
     /// Explicit teardown, not left to `deinit`: called both when this controller is about
@@ -361,7 +391,6 @@ final class LockScreenController {
     /// only ever reach it from `AppController`'s own main-queue-driven code.
     func tearDown() {
         stopSelfTicking()
-        isReloadingWallpaper = false
         invalidateWallpaper()
         guard renderer != nil || isShowingWindow else { return }
         window?.orderOut(nil)
