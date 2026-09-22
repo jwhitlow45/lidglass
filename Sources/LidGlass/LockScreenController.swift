@@ -73,10 +73,16 @@ final class LockScreenController {
             return
         }
         buildIfNeeded()
-        guard let renderer, let view else { return }
+        guard let renderer, let screen = AppController.builtInScreen(), let view else { return }
         renderer.foldTarget = target
         if view.isPaused { renderer.stepFold() }
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
+        // A cached renderer can sit idle across an unlock the controller never directly
+        // observes, if the lid does not move again until the next lock (see
+        // reloadWallpaper). Reloading right as it is about to actually be seen,
+        // rather than trying to catch the unlock itself, means what is shown is always
+        // current regardless of what happened while nothing was watching.
+        if isFolded && !isShowingWindow { reloadWallpaper(screen: screen, into: renderer) }
         setVisible(isFolded)
         view.preferredFramesPerSecond = renderer.isAnimating ? 120 : settings.stationaryFrameRate
     }
@@ -138,13 +144,21 @@ final class LockScreenController {
         self.renderer = renderer
         self.window = window
         self.view = view
-        loadWallpaper(screen: screen, device: device, into: renderer)
+        // Not loaded here: a session check happens each time this is about to actually
+        // show, whether that is the first fold of a lock or a later one reusing a cached
+        // renderer, and the wallpaper is reloaded at that same moment, see
+        // reloadWallpaper.
     }
 
-    /// The wallpaper stands in for the real lock screen, which cannot be captured: it is
-    /// reloaded once per lock, in case it changed since the last one.
-    private func loadWallpaper(screen: NSScreen, device: MTLDevice, into renderer: GlassRenderer) {
-        guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return }
+    /// The wallpaper stands in for the real lock screen, which cannot be captured. It is not
+    /// enough to reload it once per lock and trust the cache the rest of that lock session:
+    /// a session this controller never directly observes (the lid never moving between an
+    /// unlock and the next lock, so no callback of any kind arrives in between) can end with
+    /// a cached renderer from the previous lock still in place, showing its now-stale
+    /// picture. Reloading right before every reveal, not only the first one, means what
+    /// shows is always the current picture regardless of what happened while unwatched.
+    private func reloadWallpaper(screen: NSScreen, into renderer: GlassRenderer) {
+        guard let device, let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return }
         Task {
             guard let texture = try? await MTKTextureLoader(device: device).newTexture(URL: url, options: [.SRGB: false]) else {
                 NSLog("LidGlass: could not load the desktop picture for the lock screen effect")
