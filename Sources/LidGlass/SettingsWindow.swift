@@ -102,69 +102,86 @@ struct SettingsView: View {
             }
             .frame(width: 320)
 
-            VStack(alignment: .leading, spacing: 14) {
-                section("Material") {
-                    Picker("Effect", selection: $settings.effect) {
-                        ForEach(GlassEffect.allCases) { Text($0.rawValue).tag($0) }
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 14) {
+                    section("Material") {
+                        Picker("Effect", selection: $settings.effect) {
+                            ForEach(GlassEffect.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        Picker("Hinge edge", selection: $settings.hingeEdge) {
+                            ForEach(HingeEdge.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        slider("Strength", value: $settings.strength, range: 0...1, step: 0.01)
+                        slider("Perspective", value: $settings.perspective, range: 0...1, step: 0.01)
+                        slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, step: 0.5, unit: "px")
+                        slider("Corner radius", value: $settings.cornerRadius, range: 0...120, step: 1, unit: "px")
                     }
-                    Picker("Hinge edge", selection: $settings.hingeEdge) {
-                        ForEach(HingeEdge.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    slider("Strength", value: $settings.strength, range: 0...1, step: 0.01)
-                    slider("Perspective", value: $settings.perspective, range: 0...1, step: 0.01)
-                    slider("Edge softness", value: $settings.edgeSoftness, range: 0.5...16, step: 0.5, unit: "px")
-                    slider("Corner radius", value: $settings.cornerRadius, range: 0...120, step: 1, unit: "px")
-                }
-                section("Feel") {
-                    slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1, step: 0.01)
-                    slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3, step: 0.05)
-                    slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, step: 0.5, unit: "°")
-                    HStack {
-                        slider("Start angle", value: $settings.startAngle, range: 30...160, step: 1, unit: "°")
-                        Button("Use current") { controller.useCurrentAngleAsStart() }
-                            .disabled(!controller.sensorIsAvailable)
-                    }
-                    Text("The glass starts folding as the lid closes past this angle.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                section("Power") {
-                    Picker("Stationary frame rate", selection: $settings.stationaryFrameRate) {
-                        ForEach([15, 30, 60, 90, 120], id: \.self) { Text("\($0) FPS").tag($0) }
-                    }
-                    Picker("Idle polling rate", selection: $settings.idlePollingRate) {
-                        ForEach([5, 10, 20, 30, 60, 120], id: \.self) { Text("\($0) Hz").tag($0) }
-                    }
-                    idleBatteryUse
-                }
-                section("App") {
-                    switchRow("Effect enabled", isOn: $settings.isEnabled)
-                    switchRow("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
-                    switchRow("Hide the system cursor while folded", isOn: $settings.hidesSystemCursor)
-                    switchRow("Open at login", isOn: $settings.opensAtLogin)
-                    switchRow("Update automatically", isOn: $settings.updatesAutomatically)
-                    Text("Version \(Updater.installedVersion?.description ?? "unknown"). Updates come from the LidGlass releases on GitHub. Check any time from the menu bar.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                section("Lock Screen") {
-                    switchRow("Show on the lock screen", isOn: $settings.showsOnLockScreen)
-                    Label("Draws over the real lock screen using a private system call Apple has not documented and could remove without notice. It never intercepts clicks or key presses: the real lock screen and password field are always underneath it and reachable. It cannot see the real lock screen, since macOS blocks that, so it folds your desktop picture instead of what is actually on screen. Test this yourself before you rely on it.", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                    if !SkyLightOperator.shared.isAvailable {
-                        Text("The private system call this needs is not available on this Mac.")
+                    section("Feel") {
+                        slider("Responsiveness", value: $settings.responsiveness, range: 0.05...1, step: 0.01)
+                        slider("Hinge sensitivity", value: $settings.hingeSensitivity, range: 0.4...3, step: 0.05)
+                        slider("Minimum movement", value: $settings.minimumMovement, range: 0...6, step: 0.5, unit: "°")
+                        HStack {
+                            slider("Start angle", value: $settings.startAngle, range: 30...160, step: 1, unit: "°")
+                            Button("Use current") { controller.useCurrentAngleAsStart() }
+                                .disabled(!controller.sensorIsAvailable)
+                        }
+                        Text("The glass starts folding as the lid closes past this angle.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                    }
+                    section("Power") {
+                        Picker("Stationary frame rate", selection: $settings.stationaryFrameRate) {
+                            ForEach([15, 30, 60, 90, 120], id: \.self) { Text("\($0) FPS").tag($0) }
+                        }
+                        Picker("Idle polling rate", selection: $settings.idlePollingRate) {
+                            ForEach([5, 10, 20, 30, 60, 120], id: \.self) { Text("\($0) Hz").tag($0) }
+                        }
+                        idleBatteryUse
+                    }
+                    section("App") {
+                        switchRow("Effect enabled", isOn: $settings.isEnabled)
+                        switchRow("Show lid angle in menu bar", isOn: $settings.showsAngleInMenuBar)
+                        switchRow("Hide the system cursor while folded", isOn: $settings.hidesSystemCursor)
+                        switchRow("Open at login", isOn: $settings.opensAtLogin)
+                        switchRow("Update automatically", isOn: $settings.updatesAutomatically)
+                        Text("Version \(Updater.installedVersion?.description ?? "unknown"). Updates come from the LidGlass releases on GitHub. Check any time from the menu bar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    section("Lock Screen") {
+                        switchRow("Show on the lock screen", isOn: $settings.showsOnLockScreen)
+                        Label("Draws over the real lock screen using a private system call Apple has not documented and could remove without notice. It never intercepts clicks or key presses: the real lock screen and password field are always underneath it and reachable. It cannot see the real lock screen, since macOS blocks that, so it folds your desktop picture instead of what is actually on screen. Test this yourself before you rely on it.", systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                        if !SkyLightOperator.shared.isAvailable {
+                            Text("The private system call this needs is not available on this Mac.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
             .frame(width: 420)
+            // Scrolls rather than growing the window past the screen it opens on. The
+            // sections keep being added to, and the window sizes itself to its content, so
+            // without a ceiling the last section ends up below the bottom edge of a laptop
+            // display, where it cannot be reached at all. Only a ceiling: a window that
+            // still fits stays exactly as tall as its content.
+            .frame(maxHeight: SettingsView.maximumSectionsHeight)
         }
         .padding(18)
         .onDisappear { settings.isSimulating = false }
+    }
+
+    /// How tall the scrolling sections are allowed to get. Measured against the screen the
+    /// window opens on, not a fixed number, since what fits a desk display does not fit a
+    /// laptop one. `visibleFrame` already excludes the menu bar and the Dock, so what is
+    /// taken off here is the window's own title bar and padding.
+    private static var maximumSectionsHeight: CGFloat {
+        let visibleHeight = NSScreen.main?.visibleFrame.height ?? 900
+        return max(360, visibleHeight - 120)
     }
 
     /// How much reading a still lid costs, and the delay that buys back.
