@@ -60,14 +60,17 @@ final class AppController: ObservableObject {
         settings.$isEnabled
             .sink { [weak self] enabled in if !enabled { self?.shutDownEffect() } }
             .store(in: &cancellables)
-        // Created only while the setting is on: the deinit tears down its window and
-        // private-API observers, so turning it off leaves nothing running.
+        // Created only while the setting is on. Torn down explicitly, not left to deinit:
+        // a pending wallpaper reload captures itself weakly precisely so it cannot be what
+        // keeps a discarded controller alive, and deinit's own AppKit cleanup only runs as
+        // a fallback for a path that skips this.
         settings.$showsOnLockScreen
             .sink { [weak self] isOn in
                 guard let self else { return }
                 if isOn {
                     if self.lockScreenController == nil { self.lockScreenController = LockScreenController() }
                 } else {
+                    self.lockScreenController?.tearDown()
                     self.lockScreenController = nil
                 }
             }
