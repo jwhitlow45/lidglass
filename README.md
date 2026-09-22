@@ -176,4 +176,12 @@ working is a cosmetic failure here, an overlay that failed to hide would not be.
   number, and only a load that both succeeds and is still the newest one requested is
   allowed to apply its picture and reveal the window, so a slow, superseded load can never
   overwrite a faster, newer one, and a failed load leaves the window hidden rather than
-  showing whatever picture happened to be cached.
+  showing whatever picture happened to be cached (failures back off for a couple of seconds
+  rather than retrying on every tick). The lid opening back up cancels a reload still in
+  flight immediately, going by the raw lid angle rather than waiting for the fold's spring
+  to visually catch up, so a load that was only still relevant to the fold that just ended
+  can never land and get shown after the fact. The window itself only fades in once the
+  fresh frame has actually been presented, and fades out on conceal, rather than snapping
+  the previous frame's picture on or off screen. The wallpaper crop matches the desktop's
+  own EXIF orientation and the renderer's Display P3 color space, so a sideways photo or a
+  saturated one comes out the same as it would on the real desktop.
