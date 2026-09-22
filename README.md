@@ -86,6 +86,8 @@ Open from the menu bar icon.
   into the glass, so the real one would be a second copy. Hiding it from a background app
   takes a private WindowServer setting, looked up at run time. If a future macOS drops it,
   the real cursor simply stays visible.
+- **Show on the lock screen** (off by default, with a warning next to it): see
+  [Lock Screen](#lock-screen).
 
 The preview shows the material at the slider's fold. "Fold the screen with the slider"
 drives the real overlay from the slider instead of the lid. Escape, a click while the
@@ -108,6 +110,34 @@ To publish a release, set the new version in `VERSION`, commit, and run:
 ```sh
 ./release.sh   # builds, checks the signature, and publishes vVERSION with LidGlass.zip
 ```
+
+## Lock Screen
+
+Off by default. When it is on, the glass also shows while the screen is locked, folding
+over it as the lid closes and lifting away as it opens, the same as the normal effect.
+
+Two things make this different from the rest of the app, and both are why the toggle
+carries a warning and defaults to off:
+
+- **It draws above the real lock screen using a private WindowServer call**
+  (`SkyLightOperator`), not a documented API. Apple could remove it in any macOS update,
+  at which point the toggle simply stops doing anything. It is adapted from
+  [Lakr233/SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) (MIT license).
+- **It cannot see the real lock screen.** macOS blocks capturing it, the same way it blocks
+  capturing your password as you type it, so LidGlass has nothing real to fold. Instead it
+  folds a still of your desktop picture, reloaded each time the screen locks. The clock,
+  your photo, and the password field are never part of what folds.
+
+What keeps it safe to have on: the overlay window never accepts clicks or key presses
+(`ignoresMouseEvents`, and it can never become key or main), so the real lock screen and
+its password field are always live underneath it, reachable the instant you click or type.
+It also never appears on its own: it needs the lock screen's own private notifications
+(`com.apple.screenIsLocked` / `screenIsUnlocked`) to know when to show or hide, so a macOS
+change that silently breaks that leaves the toggle doing nothing rather than doing the
+wrong thing.
+
+Test this yourself before relying on it, as the warning says. A private API that stops
+working is a cosmetic failure here, an overlay that failed to hide would not be.
 
 ## How it works
 
@@ -132,3 +162,6 @@ To publish a release, set the new version in `VERSION`, commit, and run:
   the offline Metal compiler.
 - The app icon is drawn as vectors in `Resources/AppIcon.svg`. `build-app.sh` renders it
   into the bundle's icon whenever the SVG changes.
+- `LockScreenController` mirrors the main overlay's already-smoothed fold into its own
+  renderer rather than running a second spring, so the two never drift apart. It builds its
+  window only while the lock screen setting is on, so turning it off leaves nothing running.

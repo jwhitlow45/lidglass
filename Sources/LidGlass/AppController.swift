@@ -17,6 +17,9 @@ final class AppController: ObservableObject {
     private var view: OverlayView?
     /// The capture draws the cursor into the glass, so the real one would be a second copy.
     private let cursor = CursorHider()
+    /// Off by default. Created only while the setting is on, so an app that never turns it
+    /// on never touches the private calls it needs.
+    private var lockScreenController: LockScreenController?
 
     /// The latest lid reading, observed by the settings window.
     @Published private(set) var angle: Double = 0
@@ -57,6 +60,18 @@ final class AppController: ObservableObject {
         settings.$isEnabled
             .sink { [weak self] enabled in if !enabled { self?.shutDownEffect() } }
             .store(in: &cancellables)
+        // Created only while the setting is on: the deinit tears down its window and
+        // private-API observers, so turning it off leaves nothing running.
+        settings.$showsOnLockScreen
+            .sink { [weak self] isOn in
+                guard let self else { return }
+                if isOn {
+                    if self.lockScreenController == nil { self.lockScreenController = LockScreenController() }
+                } else {
+                    self.lockScreenController = nil
+                }
+            }
+            .store(in: &cancellables)
         // A still lid sends no readings, so a setting that changes where the glass should be
         // ticks the controller itself. A published setting announces itself before it is
         // stored, and tick() reads the stored values, so these ticks wait for the next turn of
@@ -78,12 +93,18 @@ final class AppController: ObservableObject {
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.rebuildOverlay() }
+        ) { [weak self] _ in
+            self?.rebuildOverlay()
+            self?.lockScreenController?.handleScreenChange()
+        }
         // Closing the lid all the way sleeps the Mac. The last frame is of a screen that
         // will not be there on wake, so it goes, and the reopening folds in fresh frames.
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
-        ) { [weak self] _ in self?.shutDownEffect() }
+        ) { [weak self] _ in
+            self?.shutDownEffect()
+            self?.lockScreenController?.handleSleep()
+        }
     }
 
     /// A start angle above the angle the lid actually sits at would hold the glass partly
@@ -141,6 +162,7 @@ final class AppController: ObservableObject {
         let isMoving = settings.simulatedFold != nil || CACurrentMediaTime() - lastMovementTime < AppController.settleDelay
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
         apply(isMoving: isMoving, isAnimating: renderer.isAnimating, isFolded: isFolded && settings.isEnabled)
+        lockScreenController?.update(fold: renderer.fold, isFolded: isFolded)
 
         // Track the lid closely from the first movement until the glass is flat and still.
         setSensorTracking(settings.isEnabled && (isMoving || isFolded || renderer.isAnimating))

@@ -149,6 +149,17 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                section("Lock Screen") {
+                    switchRow("Show on the lock screen", isOn: $settings.showsOnLockScreen)
+                    Label("Draws over the real lock screen using a private system call Apple has not documented and could remove without notice. It never intercepts clicks or key presses: the real lock screen and password field are always underneath it and reachable. It cannot see the real lock screen, since macOS blocks that, so it folds your desktop picture instead of what is actually on screen. Test this yourself before you rely on it.", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    if !SkyLightOperator.shared.isAvailable {
+                        Text("The private system call this needs is not available on this Mac.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .frame(width: 420)
         }

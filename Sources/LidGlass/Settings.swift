@@ -91,6 +91,8 @@ final class Settings: ObservableObject {
     @Published var showsAngleInMenuBar: Bool { didSet { store(showsAngleInMenuBar, "showsAngleInMenuBar") } }
     @Published var hidesSystemCursor: Bool { didSet { store(hidesSystemCursor, "hidesSystemCursor") } }
     @Published var updatesAutomatically: Bool { didSet { store(updatesAutomatically, "updatesAutomatically") } }
+    /// Off by default: see the warning next to its toggle in Settings before turning it on.
+    @Published var showsOnLockScreen: Bool { didSet { store(showsOnLockScreen, "showsOnLockScreen") } }
 
     /// Scrubber state from the settings window. While simulating, the scrubber drives the
     /// fold instead of the sensor. Neither value is worth keeping across launches.
@@ -125,6 +127,7 @@ final class Settings: ObservableObject {
             "showsAngleInMenuBar": false,
             "hidesSystemCursor": true,
             "updatesAutomatically": true,
+            "showsOnLockScreen": false,
         ])
         isEnabled = d.bool(forKey: "isEnabled")
         effect = GlassEffect(rawValue: d.string(forKey: "effect") ?? "") ?? .frosted
@@ -142,6 +145,7 @@ final class Settings: ObservableObject {
         showsAngleInMenuBar = d.bool(forKey: "showsAngleInMenuBar")
         hidesSystemCursor = d.bool(forKey: "hidesSystemCursor")
         updatesAutomatically = d.bool(forKey: "updatesAutomatically")
+        showsOnLockScreen = d.bool(forKey: "showsOnLockScreen")
         opensAtLogin = SMAppService.mainApp.status == .enabled
     }
 
