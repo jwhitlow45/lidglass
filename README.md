@@ -127,8 +127,10 @@ carries a warning and defaults to off:
 - **It cannot see the real lock screen.** macOS blocks capturing it, the same way it blocks
   capturing your password as you type it, so LidGlass has nothing real to fold. Instead it
   folds a still of your desktop picture, reloaded fresh each time it is about to be
-  shown, not only the first time in a lock session. The clock,
-  your photo, and the password field are never part of what folds.
+  shown, not only the first time in a lock session, and cropped to exactly cover the
+  screen the way macOS's own "Fill Screen" desktop picture option does, whatever the
+  picture file's own resolution or aspect ratio. The clock, your photo, and the password
+  field are never part of what folds.
 
 What keeps it safe to have on: the overlay window never accepts clicks or key presses
 (`ignoresMouseEvents`, and it can never become key or main), so the real lock screen and

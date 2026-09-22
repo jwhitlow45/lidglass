@@ -159,13 +159,44 @@ final class LockScreenController {
     /// shows is always the current picture regardless of what happened while unwatched.
     private func reloadWallpaper(screen: NSScreen, into renderer: GlassRenderer) {
         guard let device, let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return }
+        // The shader's corner radius and edge softness are measured in the source texture's
+        // own pixels, matching the normal overlay's captured frame, which is always exactly
+        // the screen's pixel size. The wallpaper file on disk is not: it can be any
+        // resolution, and any aspect ratio, down to a portrait photo set as the picture for
+        // a landscape screen. Loaded as is, that stretches the whole image, corners included,
+        // into an oval. This crops and scales it to exactly cover the screen instead, the
+        // same way macOS's own "Fill Screen" desktop picture option does, before it ever
+        // reaches the renderer.
+        let pixelSize = screen.frame.size.applying(CGAffineTransform(scaleX: screen.backingScaleFactor, y: screen.backingScaleFactor))
+        let width = max(Int(pixelSize.width.rounded()), 1)
+        let height = max(Int(pixelSize.height.rounded()), 1)
         Task {
-            guard let texture = try? await MTKTextureLoader(device: device).newTexture(URL: url, options: [.SRGB: false]) else {
+            guard let filled = LockScreenController.fillImage(at: url, width: width, height: height),
+                  let texture = try? await MTKTextureLoader(device: device).newTexture(cgImage: filled, options: [.SRGB: false]) else {
                 NSLog("LidGlass: could not load the desktop picture for the lock screen effect")
                 return
             }
             await MainActor.run { renderer.accept(texture: texture) }
         }
+    }
+
+    /// Scales the image at `url` up or down just enough to cover `width` x `height`, and
+    /// crops whatever overhangs, centered. Runs off the main actor: called from inside a
+    /// plain `Task`, and does real decoding and drawing work.
+    private static func fillImage(at url: URL, width: Int, height: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let imageWidth = CGFloat(image.width), imageHeight = CGFloat(image.height)
+        guard imageWidth > 0, imageHeight > 0 else { return nil }
+        let scale = max(CGFloat(width) / imageWidth, CGFloat(height) / imageHeight)
+        let scaledWidth = imageWidth * scale, scaledHeight = imageHeight * scale
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        context.interpolationQuality = .high
+        let origin = CGPoint(x: (CGFloat(width) - scaledWidth) / 2, y: (CGFloat(height) - scaledHeight) / 2)
+        context.draw(image, in: CGRect(origin: origin, size: CGSize(width: scaledWidth, height: scaledHeight)))
+        return context.makeImage()
     }
 
     private func setVisible(_ visible: Bool) {
