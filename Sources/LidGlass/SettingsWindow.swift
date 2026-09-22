@@ -162,8 +162,14 @@ struct SettingsView: View {
                         }
                     }
                 }
+                .frame(width: SettingsView.sectionsWidth)
+                .padding(.trailing, SettingsView.edgePadding)
             }
-            .frame(width: 420)
+            // Reaches the window's right edge, rather than stopping where the sections do,
+            // so the scroller sits in the margin beside them. macOS draws it inside the
+            // scroll view's own bounds, over whatever is under it, so a scroll view only as
+            // wide as its content gets a scroller on top of that content.
+            .frame(width: SettingsView.sectionsWidth + SettingsView.edgePadding)
             // Scrolls rather than growing the window past the screen it opens on. The
             // sections keep being added to, and the window sizes itself to its content, so
             // without a ceiling the last section ends up below the bottom edge of a laptop
@@ -171,9 +177,16 @@ struct SettingsView: View {
             // still fits stays exactly as tall as its content.
             .frame(maxHeight: SettingsView.maximumSectionsHeight)
         }
-        .padding(18)
+        .padding(.leading, SettingsView.edgePadding)
+        .padding(.vertical, SettingsView.edgePadding)
         .onDisappear { settings.isSimulating = false }
     }
+
+    /// The sections column's own width, and the margin the window keeps around everything.
+    /// The scroll view is one margin wider than the sections, which is where its scroller
+    /// goes.
+    private static let sectionsWidth: CGFloat = 420
+    private static let edgePadding: CGFloat = 18
 
     /// How tall the scrolling sections are allowed to get. Measured against the screen the
     /// window opens on, not a fixed number, since what fits a desk display does not fit a
