@@ -171,4 +171,9 @@ working is a cosmetic failure here, an overlay that failed to hide would not be.
   reusing the main overlay's: while locked, the main overlay's window sits behind the real
   lock screen, and macOS throttles drawing for a window nothing can see. It builds its
   window only while the lock screen setting is on, and only for as long as the screen is
-  actually locked, so turning either off leaves nothing running.
+  actually locked, so turning either off leaves nothing running. It never shows the window
+  on the strength of a wallpaper reload merely starting: each reload carries a generation
+  number, and only a load that both succeeds and is still the newest one requested is
+  allowed to apply its picture and reveal the window, so a slow, superseded load can never
+  overwrite a faster, newer one, and a failed load leaves the window hidden rather than
+  showing whatever picture happened to be cached.

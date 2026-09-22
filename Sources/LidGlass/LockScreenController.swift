@@ -26,6 +26,16 @@ final class LockScreenController {
     /// Left to that alone, a still-open, still-decaying pane could stay on screen (and stay
     /// unchecked against the real session) far longer than intended.
     private var selfTickTimer: Timer?
+    /// True once a reload has finished, applied its texture, and been shown at least once
+    /// for the reveal in progress. Reset on every conceal, so the next reveal, even a later
+    /// one in the same lock session, always validates a fresh wallpaper before showing again.
+    private var hasFreshWallpaper = false
+    /// Bumped on every reload attempt and on teardown, so a completion can tell whether a
+    /// newer attempt has since superseded it. Two loads can be in flight briefly (a fast
+    /// one started after a slow one), and without this the slow one finishing last could
+    /// overwrite the fast one's already-applied, already-shown result with an older picture.
+    private var wallpaperGeneration = 0
+    private var isReloadingWallpaper = false
 
     init() {
         if !sky.isAvailable {
@@ -77,13 +87,36 @@ final class LockScreenController {
         renderer.foldTarget = target
         if view.isPaused { renderer.stepFold() }
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
-        // A cached renderer can sit idle across an unlock the controller never directly
-        // observes, if the lid does not move again until the next lock (see
-        // reloadWallpaper). Reloading right as it is about to actually be seen,
-        // rather than trying to catch the unlock itself, means what is shown is always
-        // current regardless of what happened while nothing was watching.
-        if isFolded && !isShowingWindow { reloadWallpaper(screen: screen, into: renderer) }
-        setVisible(isFolded)
+        if isFolded {
+            // A cached renderer can sit idle across an unlock the controller never directly
+            // observes, if the lid does not move again until the next lock (see
+            // reloadWallpaper). Reloading right as it is about to actually be seen, rather
+            // than trying to catch the unlock itself, means what is shown is always current
+            // regardless of what happened while nothing was watching. The window only
+            // becomes visible once that load has actually finished and been applied
+            // (`revealIfStillAppropriate`, called from the load's completion), not the
+            // moment the load merely starts: showing it first would mean showing whatever
+            // the cached renderer already had, stale, for however long the load takes, or
+            // forever if it fails.
+            if hasFreshWallpaper {
+                setVisible(true)
+            } else {
+                reloadWallpaper(screen: screen, into: renderer)
+            }
+        } else {
+            setVisible(false)
+        }
+        view.preferredFramesPerSecond = renderer.isAnimating ? 120 : settings.stationaryFrameRate
+    }
+
+    /// Re-checks everything `apply` would have, since a reload finishing is an async event
+    /// that can land after conditions have moved on: the setting could have been turned
+    /// off, the screen could have been unlocked, or the lid could be back to flat.
+    private func revealIfStillAppropriate() {
+        guard hasFreshWallpaper, sky.isAvailable, settings.showsOnLockScreen, settings.isEnabled,
+              LockScreenController.isScreenLocked(), let renderer, let view else { return }
+        guard renderer.fold > FoldModel.restingTolerance || lastTarget > FoldModel.restingTolerance else { return }
+        setVisible(true)
         view.preferredFramesPerSecond = renderer.isAnimating ? 120 : settings.stationaryFrameRate
     }
 
@@ -158,31 +191,53 @@ final class LockScreenController {
     /// picture. Reloading right before every reveal, not only the first one, means what
     /// shows is always the current picture regardless of what happened while unwatched.
     private func reloadWallpaper(screen: NSScreen, into renderer: GlassRenderer) {
-        guard let device, let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return }
-        // The shader's corner radius and edge softness are measured in the source texture's
-        // own pixels, matching the normal overlay's captured frame, which is always exactly
-        // the screen's pixel size. The wallpaper file on disk is not: it can be any
-        // resolution, and any aspect ratio, down to a portrait photo set as the picture for
-        // a landscape screen. Loaded as is, that stretches the whole image, corners included,
-        // into an oval. This crops and scales it to exactly cover the screen instead, the
-        // same way macOS's own "Fill Screen" desktop picture option does, before it ever
-        // reaches the renderer.
+        guard let device, !isReloadingWallpaper else { return }
+        isReloadingWallpaper = true
+        wallpaperGeneration += 1
+        let generation = wallpaperGeneration
         let pixelSize = screen.frame.size.applying(CGAffineTransform(scaleX: screen.backingScaleFactor, y: screen.backingScaleFactor))
         let width = max(Int(pixelSize.width.rounded()), 1)
         let height = max(Int(pixelSize.height.rounded()), 1)
         Task {
-            guard let filled = LockScreenController.fillImage(at: url, width: width, height: height),
-                  let texture = try? await MTKTextureLoader(device: device).newTexture(cgImage: filled, options: [.SRGB: false]) else {
-                NSLog("LidGlass: could not load the desktop picture for the lock screen effect")
-                return
+            let image = await LockScreenController.loadWallpaperImage(screen, width, height)
+            let texture: MTLTexture?
+            if let image {
+                texture = try? await MTKTextureLoader(device: device).newTexture(cgImage: image, options: [.SRGB: false])
+            } else {
+                texture = nil
             }
-            await MainActor.run { renderer.accept(texture: texture) }
+            await MainActor.run {
+                self.isReloadingWallpaper = false
+                // A newer reload has since started: whichever order the two finish in, an
+                // older one must never overwrite a newer one's already-applied result.
+                guard generation == self.wallpaperGeneration else { return }
+                guard let texture else {
+                    NSLog("LidGlass: could not load the desktop picture for the lock screen effect")
+                    return
+                }
+                renderer.accept(texture: texture)
+                self.hasFreshWallpaper = true
+                self.revealIfStillAppropriate()
+            }
         }
     }
 
+    /// Loads and fills the current wallpaper for `screen` to exactly `width` x `height`. A
+    /// `static var` closure, like `isScreenLocked`, so a test can control timing and
+    /// success or failure without touching the real filesystem.
+    static var loadWallpaperImage: (_ screen: NSScreen, _ width: Int, _ height: Int) async -> CGImage? = { screen, width, height in
+        guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }
+        return LockScreenController.fillImage(at: url, width: width, height: height)
+    }
+
     /// Scales the image at `url` up or down just enough to cover `width` x `height`, and
-    /// crops whatever overhangs, centered. Runs off the main actor: called from inside a
-    /// plain `Task`, and does real decoding and drawing work.
+    /// crops whatever overhangs, centered, the way macOS's own "Fill Screen" desktop
+    /// picture option does. The shader's corner radius and edge softness are measured in
+    /// the source texture's own pixels, matching the normal overlay's captured frame, which
+    /// is always exactly the screen's pixel size. The wallpaper file on disk is not: it can
+    /// be any resolution, and any aspect ratio, down to a portrait photo set as the picture
+    /// for a landscape screen. Loaded as is, that stretches the whole image, corners
+    /// included, into an oval.
     private static func fillImage(at url: URL, width: Int, height: Int) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
@@ -209,11 +264,20 @@ final class LockScreenController {
         } else {
             window.orderOut(nil)
             stopSelfTicking()
+            // The next reveal, even a later one in the same lock session, must validate a
+            // fresh wallpaper again before it may show anything.
+            hasFreshWallpaper = false
         }
     }
 
     private func tearDown() {
         stopSelfTicking()
+        // Invalidates a reload still in flight: its completion will see a generation that no
+        // longer matches and discard its result rather than acting on a renderer that may no
+        // longer be the current one.
+        wallpaperGeneration += 1
+        isReloadingWallpaper = false
+        hasFreshWallpaper = false
         guard renderer != nil || isShowingWindow else { return }
         window?.orderOut(nil)
         view?.isPaused = true
