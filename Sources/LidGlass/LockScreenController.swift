@@ -18,6 +18,14 @@ final class LockScreenController {
     private var window: LockScreenWindow?
     private var view: OverlayView?
     private var isShowingWindow = false
+    /// The last target `update(target:)` received, reused by `selfTick`.
+    private var lastTarget: Double = 0
+    /// Runs only while shown: `AppController` only calls `update(target:)` when its own,
+    /// separately-timed spring is still moving or the lid itself moves, and this spring can
+    /// still be settling after that one goes quiet, or after the lid stops moving entirely.
+    /// Left to that alone, a still-open, still-decaying pane could stay on screen (and stay
+    /// unchecked against the real session) far longer than intended.
+    private var selfTickTimer: Timer?
 
     init() {
         if !sky.isAvailable {
@@ -26,6 +34,7 @@ final class LockScreenController {
     }
 
     deinit {
+        selfTickTimer?.invalidate()
         window?.orderOut(nil)
     }
 
@@ -36,20 +45,29 @@ final class LockScreenController {
     /// throttles drawing for a window nothing can see, so borrowing its motion looked
     /// noticeably more stuttery here than on the desktop.
     func update(target: Double) {
+        lastTarget = target
+        apply(target: target)
+    }
+
+    /// Runs both from `update(target:)` and, while shown, from `selfTickTimer`, using
+    /// whatever target was last known either way.
+    private func apply(target: Double) {
         guard sky.isAvailable, settings.showsOnLockScreen, settings.isEnabled else {
             tearDown()
             return
         }
-        // An idle, flat lid has nothing to show regardless of whether it is locked, so it
-        // is left alone here rather than torn down: tearing down would mean reloading the
-        // wallpaper and rebuilding the renderer on every settle, in case the same lock
-        // session folds again.
-        guard target > FoldModel.restingTolerance || isShowingWindow else { return }
+        // Checked whenever something might need to show, or a cached renderer needs to be
+        // confirmed still valid, not on every idle tick: a flat lid with nothing built has
+        // nothing to show or invalidate regardless of whether it is locked.
+        guard target > FoldModel.restingTolerance || isShowingWindow || renderer != nil else { return }
         // The lock/unlock notifications macOS posts are not guaranteed delivery (Apple's
         // own documentation says so), so this checks the real session state itself rather
         // than trusting a notification history. This also covers launching while already
-        // locked and waking from sleep, neither of which posts a fresh notification to
-        // react to.
+        // locked, waking from sleep, and unlocking while a cached renderer sits hidden
+        // between two folds in the same session, none of which post a fresh notification
+        // to react to. Checking whenever a renderer is cached, not only while visible, is
+        // what keeps that cached renderer's wallpaper from surviving past the unlock that
+        // should have invalidated it.
         guard LockScreenController.isScreenLocked() else {
             tearDown()
             return
@@ -61,6 +79,25 @@ final class LockScreenController {
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
         setVisible(isFolded)
         view.preferredFramesPerSecond = renderer.isAnimating ? 120 : settings.stationaryFrameRate
+    }
+
+    /// Keeps checking after `update(target:)` stops being called, so a pane that is still
+    /// decaying toward flat still gets concealed, and the real session state still gets
+    /// rechecked, once the normal overlay (which drives when `update` is called) has
+    /// already gone quiet.
+    private func startSelfTicking() {
+        guard selfTickTimer == nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.apply(target: self.lastTarget)
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        selfTickTimer = timer
+    }
+
+    private func stopSelfTicking() {
+        selfTickTimer?.invalidate()
+        selfTickTimer = nil
     }
 
     /// The built-in display changing (an external monitor connected or disconnected while
@@ -123,12 +160,15 @@ final class LockScreenController {
         view.isPaused = !visible
         if visible {
             window.orderFrontRegardless()
+            startSelfTicking()
         } else {
             window.orderOut(nil)
+            stopSelfTicking()
         }
     }
 
     private func tearDown() {
+        stopSelfTicking()
         guard renderer != nil || isShowingWindow else { return }
         window?.orderOut(nil)
         view?.isPaused = true
