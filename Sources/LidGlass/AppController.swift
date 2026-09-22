@@ -162,7 +162,7 @@ final class AppController: ObservableObject {
         let isMoving = settings.simulatedFold != nil || CACurrentMediaTime() - lastMovementTime < AppController.settleDelay
         let isFolded = renderer.fold > FoldModel.restingTolerance || target > FoldModel.restingTolerance
         apply(isMoving: isMoving, isAnimating: renderer.isAnimating, isFolded: isFolded && settings.isEnabled)
-        lockScreenController?.update(fold: renderer.fold, isFolded: isFolded)
+        lockScreenController?.update(target: target)
 
         // Track the lid closely from the first movement until the glass is flat and still.
         setSensorTracking(settings.isEnabled && (isMoving || isFolded || renderer.isAnimating))

@@ -122,7 +122,8 @@ carries a warning and defaults to off:
 - **It draws above the real lock screen using a private WindowServer call**
   (`SkyLightOperator`), not a documented API. Apple could remove it in any macOS update,
   at which point the toggle simply stops doing anything. It is adapted from
-  [Lakr233/SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) (MIT license).
+  [Lakr233/SkyLightWindow](https://github.com/Lakr233/SkyLightWindow) (MIT license, its
+  notice reproduced in `THIRD-PARTY-NOTICES.md` and in the built app's Resources).
 - **It cannot see the real lock screen.** macOS blocks capturing it, the same way it blocks
   capturing your password as you type it, so LidGlass has nothing real to fold. Instead it
   folds a still of your desktop picture, reloaded each time the screen locks. The clock,
@@ -131,10 +132,11 @@ carries a warning and defaults to off:
 What keeps it safe to have on: the overlay window never accepts clicks or key presses
 (`ignoresMouseEvents`, and it can never become key or main), so the real lock screen and
 its password field are always live underneath it, reachable the instant you click or type.
-It also never appears on its own: it needs the lock screen's own private notifications
-(`com.apple.screenIsLocked` / `screenIsUnlocked`) to know when to show or hide, so a macOS
-change that silently breaks that leaves the toggle doing nothing rather than doing the
-wrong thing.
+It also never appears on its own: it checks whether the screen is actually locked (an
+undocumented key in the session dictionary `CGSessionCopyCurrentDictionary` returns, not a
+private call) fresh, every time it would show or stay shown, rather than trusting macOS's
+lock notifications, which are not guaranteed delivery. A macOS change that breaks this
+check leaves the toggle doing nothing, rather than showing at the wrong time.
 
 Test this yourself before relying on it, as the warning says. A private API that stops
 working is a cosmetic failure here, an overlay that failed to hide would not be.
@@ -162,6 +164,8 @@ working is a cosmetic failure here, an overlay that failed to hide would not be.
   the offline Metal compiler.
 - The app icon is drawn as vectors in `Resources/AppIcon.svg`. `build-app.sh` renders it
   into the bundle's icon whenever the SVG changes.
-- `LockScreenController` mirrors the main overlay's already-smoothed fold into its own
-  renderer rather than running a second spring, so the two never drift apart. It builds its
-  window only while the lock screen setting is on, so turning it off leaves nothing running.
+- `LockScreenController` runs its own copy of the same spring and renderer, rather than
+  reusing the main overlay's: while locked, the main overlay's window sits behind the real
+  lock screen, and macOS throttles drawing for a window nothing can see. It builds its
+  window only while the lock screen setting is on, and only for as long as the screen is
+  actually locked, so turning either off leaves nothing running.
