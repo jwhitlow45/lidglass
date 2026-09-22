@@ -274,19 +274,27 @@ final class LockScreenController {
     /// `static var` closure, like `isScreenLocked`, so a test can control timing and
     /// success or failure without touching the real filesystem.
     static var loadWallpaperImage: (_ screen: NSScreen, _ width: Int, _ height: Int) async -> CGImage? = { screen, width, height in
-        guard let url = NSWorkspace.shared.desktopImageURL(for: screen) else { return nil }
-        return LockScreenController.fillImage(at: url, width: width, height: height)
+        let workspace = NSWorkspace.shared
+        guard let url = workspace.desktopImageURL(for: screen) else { return nil }
+        return LockScreenController.fillImage(at: url, width: width, height: height,
+                                              options: workspace.desktopImageOptions(for: screen) ?? [:])
     }
 
-    /// Scales the image at `url` up or down just enough to cover `width` x `height`, and
-    /// crops whatever overhangs, centered, the way macOS's own "Fill Screen" desktop
-    /// picture option does. The shader's corner radius and edge softness are measured in
-    /// the source texture's own pixels, matching the normal overlay's captured frame, which
-    /// is always exactly the screen's pixel size. The wallpaper file on disk is not: it can
-    /// be any resolution, and any aspect ratio, down to a portrait photo set as the picture
-    /// for a landscape screen. Loaded as is, that stretches the whole image, corners
-    /// included, into an oval.
-    private static func fillImage(at url: URL, width: Int, height: Int) -> CGImage? {
+    /// Draws the image at `url` onto a `width` x `height` bitmap, placed the way macOS is
+    /// placing it on the desktop right now: `options` is what `NSWorkspace` reports for this
+    /// screen, and every scaling mode it can name is honored here. Guessing a single mode
+    /// instead, even the common one, silently shows a different part of the picture than the
+    /// screen underneath does. A stretched portrait photo, for one, keeps its whole subject
+    /// on screen, squashed, while covering and cropping the same file discards everything
+    /// outside a narrow middle band.
+    ///
+    /// The bitmap is always exactly the screen's pixel size, whatever the mode, because the
+    /// shader's corner radius and edge softness are measured in the source texture's own
+    /// pixels. That matches the normal overlay's captured frame, which is always the screen's
+    /// pixel size. A wallpaper file is not: handing the shader a texture of some other shape
+    /// pulls the rounded corners into ovals.
+    private static func fillImage(at url: URL, width: Int, height: Int,
+                                  options: [NSWorkspace.DesktopImageOptionKey: Any]) -> CGImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let sourceWidth = properties[kCGImagePropertyPixelWidth] as? CGFloat,
@@ -302,13 +310,15 @@ final class LockScreenController {
         } ?? false
         let orientedWidth = isSwapped ? sourceHeight : sourceWidth
         let orientedHeight = isSwapped ? sourceWidth : sourceHeight
-        // The same "cover, then crop" scale the final image is fit with below, computed
-        // against the source's own resolution: a max pixel size derived from the target
-        // screen alone, ignoring the source's aspect ratio, can ask for a thumbnail smaller
-        // than what filling the screen actually needs, then this function's own crop
-        // upscales that undersized thumbnail rather than the original file's real detail.
-        let fillScale = max(CGFloat(width) / orientedWidth, CGFloat(height) / orientedHeight)
-        let longestEdge = Int((max(orientedWidth, orientedHeight) * fillScale).rounded(.up))
+        let drawSize = placedSize(oriented: CGSize(width: orientedWidth, height: orientedHeight),
+                                  target: CGSize(width: CGFloat(width), height: CGFloat(height)),
+                                  options: options)
+        // Sized from the placement actually chosen, rather than from the screen alone: the
+        // thumbnail keeps the source's aspect ratio, so its longest edge has to cover
+        // whichever axis is scaled up the most, or the draw below enlarges an undersized
+        // thumbnail instead of the file's real detail.
+        let widest = max(drawSize.width / orientedWidth, drawSize.height / orientedHeight)
+        let longestEdge = Int((max(orientedWidth, orientedHeight) * widest).rounded(.up))
         // Applies EXIF orientation (a portrait photo stored sideways with rotation metadata,
         // say) before any of the math below runs, rather than trusting the file's raw,
         // possibly-rotated pixel grid: unapplied, both the crop and the final image would
@@ -319,20 +329,47 @@ final class LockScreenController {
             kCGImageSourceThumbnailMaxPixelSize: longestEdge,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else { return nil }
-        let imageWidth = CGFloat(image.width), imageHeight = CGFloat(image.height)
-        guard imageWidth > 0, imageHeight > 0 else { return nil }
-        let scale = max(CGFloat(width) / imageWidth, CGFloat(height) / imageHeight)
-        let scaledWidth = imageWidth * scale, scaledHeight = imageHeight * scale
+        guard image.width > 0, image.height > 0 else { return nil }
         // Matches the color space the renderer's view actually presents in: a mismatched
         // color space here would still decode correctly, but every color would come out
         // shifted, since nothing downstream converts between them.
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
                                       space: CGColorSpace(name: ScreenCaptureSource.colorSpace) ?? CGColorSpaceCreateDeviceRGB(),
                                       bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
+        // Whatever the picture does not cover is the same color macOS puts there, so a
+        // wallpaper that does not reach the edges matches the screen underneath rather than
+        // sitting on an assumed black.
+        let fillColor = (options[.fillColor] as? NSColor)?.usingColorSpace(.deviceRGB)?.cgColor
+        context.setFillColor(fillColor ?? CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
         context.interpolationQuality = .high
-        let origin = CGPoint(x: (CGFloat(width) - scaledWidth) / 2, y: (CGFloat(height) - scaledHeight) / 2)
-        context.draw(image, in: CGRect(origin: origin, size: CGSize(width: scaledWidth, height: scaledHeight)))
+        let origin = CGPoint(x: (CGFloat(width) - drawSize.width) / 2, y: (CGFloat(height) - drawSize.height) / 2)
+        context.draw(image, in: CGRect(origin: origin, size: drawSize))
         return context.makeImage()
+    }
+
+    /// How large the wallpaper itself is drawn, before centering, for the scaling mode macOS
+    /// reports. `allowClipping` is what separates covering the screen from fitting inside it:
+    /// both scale proportionally, and only one is allowed to overhang and be cropped.
+    private static func placedSize(oriented: CGSize, target: CGSize,
+                                   options: [NSWorkspace.DesktopImageOptionKey: Any]) -> CGSize {
+        let scaling = (options[.imageScaling] as? NSNumber)
+            .flatMap { NSImageScaling(rawValue: $0.uintValue) } ?? .scaleProportionallyUpOrDown
+        let allowsClipping = (options[.allowClipping] as? NSNumber)?.boolValue ?? false
+        let cover = max(target.width / oriented.width, target.height / oriented.height)
+        let fit = min(target.width / oriented.width, target.height / oriented.height)
+        let proportional = allowsClipping ? cover : fit
+        switch scaling {
+        case .scaleAxesIndependently:
+            return target
+        case .scaleNone:
+            return oriented
+        case .scaleProportionallyDown:
+            let scale = min(proportional, 1)
+            return CGSize(width: oriented.width * scale, height: oriented.height * scale)
+        default:
+            return CGSize(width: oriented.width * proportional, height: oriented.height * proportional)
+        }
     }
 
     /// The window only enters and leaves the screen while fully transparent, the same
