@@ -10,15 +10,19 @@ glass moves at the speed of your hand, holds when you pause, and retraces when y
 
 ## Requirements
 
+To find out whether your own Mac can run it, paste this into Terminal. It only reads and
+prints, and it says plainly whether the hardware is there:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jwhitlow45/lidglass/main/check-hardware.sh | bash
+```
+
+That runs [check-hardware.sh](check-hardware.sh), which is worth reading first if you would
+rather not run something straight off the web.
+
 - macOS 14 or later, Apple silicon or Intel
-- A MacBook with the continuous lid-angle sensor. Check with:
-
-  ```sh
-  hidutil list --matching '{"PrimaryUsagePage":32,"PrimaryUsage":138}'
-  ```
-
-  A `las` device in the output means the sensor is there.
-- Xcode command line tools (Swift 6)
+- A MacBook with the continuous lid-angle sensor, which is what the check above looks for
+- Xcode command line tools (Swift 6), to build it yourself
 - Screen Recording permission for LidGlass. The glass is your own screen, redrawn.
 
 ## Build and run
