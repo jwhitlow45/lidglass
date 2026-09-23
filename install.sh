@@ -76,7 +76,11 @@ if ! mkdir "$LOCK" 2>/dev/null; then
     stop "Could not write to $TARGET, so nothing was changed."
 fi
 WORK=""
-trap 'rmdir "$LOCK" 2>/dev/null || true; rm -rf "${WORK:-}" "${STAGED:-}"' EXIT
+# The staged copy is cleared while the lock is still held, so a second installer that takes
+# the lock next cannot have its own staged copy deleted from under it. Tolerating a failure
+# here is what keeps that from costing the lock: a command that fails inside an exit trap
+# stops the rest of the trap, and a lock left behind turns every later run away.
+trap 'rm -rf "${WORK:-}" "${STAGED:-}" 2>/dev/null || true; rmdir "$LOCK" 2>/dev/null || true' EXIT
 
 # An earlier run stopped between the two renames below, so the only copy there is the one
 # it set aside. Putting it back comes before anything is removed, or this run would delete

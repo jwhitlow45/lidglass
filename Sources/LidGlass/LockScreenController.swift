@@ -361,12 +361,15 @@ final class LockScreenController {
         // per inch. A file tagged at another resolution is meant to be drawn smaller or larger
         // than its pixels, and the two size-limited placements are measured against that. The
         // two axes can carry different resolutions, which is what makes a picture's points
-        // taller or wider than its pixels, so they are kept apart here. A sideways orientation
-        // swaps which of them describes which oriented edge, the same way it swaps the edges.
-        let rawDPIWidth = properties[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
-        let rawDPIHeight = properties[kCGImagePropertyDPIHeight] as? CGFloat ?? 72
-        let dpiAcross = isSwapped ? rawDPIHeight : rawDPIWidth
-        let dpiDown = isSwapped ? rawDPIWidth : rawDPIHeight
+        // taller or wider than its pixels, so they are kept apart here.
+        //
+        // The axes are not swapped for a sideways orientation, even though the edges are.
+        // Measured against AppKit: a 200x100 file tagged 144 across and 72 down, with the
+        // orientation that displays it rotated, comes back from `NSImage.size` as 50 by 200
+        // points, which is each resolution applied to the edge it shares a name with rather
+        // than to the edge it ends up on.
+        let dpiAcross = properties[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
+        let dpiDown = properties[kCGImagePropertyDPIHeight] as? CGFloat ?? 72
         let naturalScale = CGSize(width: (dpiAcross > 0 ? 72 / dpiAcross : 1) * picture.scale,
                                   height: (dpiDown > 0 ? 72 / dpiDown : 1) * picture.scale)
         let drawSize = placedSize(oriented: CGSize(width: orientedWidth, height: orientedHeight),
