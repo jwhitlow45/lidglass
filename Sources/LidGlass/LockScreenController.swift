@@ -359,9 +359,16 @@ final class LockScreenController {
         let orientedHeight = isSwapped ? sourceWidth : sourceHeight
         // A picture's natural size is measured in points, which is its pixel count only at 72
         // per inch. A file tagged at another resolution is meant to be drawn smaller or larger
-        // than its pixels, and the two size-limited placements are measured against that.
-        let dpi = properties[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
-        let naturalScale = (dpi > 0 ? 72 / dpi : 1) * picture.scale
+        // than its pixels, and the two size-limited placements are measured against that. The
+        // two axes can carry different resolutions, which is what makes a picture's points
+        // taller or wider than its pixels, so they are kept apart here. A sideways orientation
+        // swaps which of them describes which oriented edge, the same way it swaps the edges.
+        let rawDPIWidth = properties[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
+        let rawDPIHeight = properties[kCGImagePropertyDPIHeight] as? CGFloat ?? 72
+        let dpiAcross = isSwapped ? rawDPIHeight : rawDPIWidth
+        let dpiDown = isSwapped ? rawDPIWidth : rawDPIHeight
+        let naturalScale = CGSize(width: (dpiAcross > 0 ? 72 / dpiAcross : 1) * picture.scale,
+                                  height: (dpiDown > 0 ? 72 / dpiDown : 1) * picture.scale)
         let drawSize = placedSize(oriented: CGSize(width: orientedWidth, height: orientedHeight),
                                   target: CGSize(width: CGFloat(width), height: CGFloat(height)),
                                   picture: picture, naturalScale: naturalScale)
@@ -405,10 +412,10 @@ final class LockScreenController {
     /// How large the wallpaper itself is drawn, before centering, for the scaling mode macOS
     /// reports. `allowClipping` is what separates covering the screen from fitting inside it:
     /// both scale proportionally, and only one is allowed to overhang and be cropped.
-    /// `naturalScale` turns the picture's own size into pixels of this bitmap, so the two
-    /// placements that are limited by that size can be measured in the same units as the rest.
+    /// `naturalScale` turns the picture's own size into pixels of this bitmap, per axis, so
+    /// the two placements limited by that size are measured in the same units as the rest.
     private static func placedSize(oriented: CGSize, target: CGSize, picture: DesktopPicture,
-                                   naturalScale: CGFloat) -> CGSize {
+                                   naturalScale: CGSize) -> CGSize {
         let cover = max(target.width / oriented.width, target.height / oriented.height)
         // No placement could be read at all, so this falls back to what macOS itself starts
         // from, Fill Screen, rather than to what AppKit documents for an absent key, which
@@ -422,9 +429,10 @@ final class LockScreenController {
         case .scaleAxesIndependently:
             return target
         case .scaleNone:
-            return CGSize(width: oriented.width * naturalScale, height: oriented.height * naturalScale)
+            return CGSize(width: oriented.width * naturalScale.width, height: oriented.height * naturalScale.height)
         case .scaleProportionallyDown:
-            let limited = min(proportional, naturalScale)
+            // One factor for both axes, so the limit is whichever axis reaches its own size first.
+            let limited = min(proportional, min(naturalScale.width, naturalScale.height))
             return CGSize(width: oriented.width * limited, height: oriented.height * limited)
         default:
             return CGSize(width: oriented.width * proportional, height: oriented.height * proportional)

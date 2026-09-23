@@ -40,9 +40,15 @@ fi
 # rather than leaving a second one behind in the other folder. Otherwise /Applications,
 # which administrators can write, and a standard account's own Applications folder, which
 # needs no password and works the same way.
-if [ -d "/Applications/LidGlass.app" ] && [ -w "/Applications" ]; then
+#
+# A folder holding only the backup an interrupted install left behind still counts as the
+# folder a copy lives in. Passing over it would strand that copy where nobody would look.
+holds_a_copy() {
+    [ -d "$1/LidGlass.app" ] || [ -d "$1/.LidGlass.app.previous" ]
+}
+if holds_a_copy "/Applications" && [ -w "/Applications" ]; then
     TARGET="/Applications"
-elif [ -d "$HOME/Applications/LidGlass.app" ]; then
+elif holds_a_copy "$HOME/Applications"; then
     TARGET="$HOME/Applications"
 elif [ -w /Applications ]; then
     TARGET="/Applications"
@@ -51,6 +57,51 @@ else
     mkdir -p "$TARGET"
 fi
 APP="$TARGET/LidGlass.app"
+
+# Claimed and repaired before anything is downloaded, so a run that never gets its archive
+# still leaves this folder in a state someone can use.
+STAGED="$TARGET/.LidGlass.app.incoming"
+PREVIOUS="$TARGET/.LidGlass.app.previous"
+# mkdir either creates the lock or fails, with nothing in between, so a second installer
+# running at the same time stops here rather than clearing the first one's staged copy or
+# its backup out from under it.
+LOCK="$TARGET/.LidGlass.install.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    if [ -d "$LOCK" ]; then
+        stop "Another install is already running in $TARGET. If that is wrong, remove $LOCK and run this again."
+    fi
+    stop "Could not write to $TARGET, so nothing was changed."
+fi
+WORK=""
+trap 'rmdir "$LOCK" 2>/dev/null || true; rm -rf "${WORK:-}" "${STAGED:-}"' EXIT
+
+# An earlier run stopped between the two renames below, so the only copy there is the one
+# it set aside. Putting it back comes before anything is removed, or this run would delete
+# the copy that run left behind and a failure here would leave none at all.
+if [ -d "$PREVIOUS" ] && [ ! -d "$APP" ]; then
+    mv "$PREVIOUS" "$APP" || stop "A copy of LidGlass is sitting at $PREVIOUS from an interrupted install, and could not be put back."
+fi
+WORK="$(mktemp -d)"
+
+printf '  Downloading the latest release\n'
+curl -fL --progress-bar -o "$WORK/LidGlass.zip" "$ARCHIVE_URL" \
+    || stop "Could not download the release from $ARCHIVE_URL"
+
+ditto -x -k "$WORK/LidGlass.zip" "$WORK/expanded" || stop "The downloaded archive would not expand."
+NEW_APP="$WORK/expanded/LidGlass.app"
+[ -d "$NEW_APP" ] || stop "The downloaded archive does not contain LidGlass.app."
+
+# Catches an archive that arrived damaged. It says the bundle still matches its own
+# signature, not who signed it: LidGlass signs itself with a certificate it makes locally,
+# which no Mac but the one that made it has any reason to trust.
+codesign --verify --strict "$NEW_APP" 2>/dev/null || stop "The downloaded copy is damaged, so nothing was installed."
+
+# The copy already installed is not touched until the new one is sitting on the same volume,
+# ready to take its place, and it goes back if the swap itself fails. Deleting first would
+# mean an install that fails halfway leaves no working copy at all.
+printf '  Installing into %s\n' "$TARGET"
+rm -rf "$STAGED" "$PREVIOUS" || stop "Could not clear an earlier install's leftovers from $TARGET, so nothing was changed."
+ditto "$NEW_APP" "$STAGED" || { rm -rf "$STAGED"; stop "Could not write to $TARGET, so nothing was changed."; }
 
 # A running copy has to go before its bundle is replaced underneath it, and a copy that
 # will not go has to stop the install rather than have its bundle swapped while it runs.
@@ -79,50 +130,6 @@ for RUNNING in $(pgrep -x LidGlass 2>/dev/null || true); do
     esac
 done
 
-# Claimed and repaired before anything is downloaded, so a run that never gets its archive
-# still leaves this folder in a state someone can use.
-STAGED="$TARGET/.LidGlass.app.incoming"
-PREVIOUS="$TARGET/.LidGlass.app.previous"
-# mkdir either creates the lock or fails, with nothing in between, so a second installer
-# running at the same time stops here rather than clearing the first one's staged copy or
-# its backup out from under it.
-LOCK="$TARGET/.LidGlass.install.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
-    if [ -d "$LOCK" ]; then
-        stop "Another install is already running in $TARGET. If that is wrong, remove $LOCK and run this again."
-    fi
-    stop "Could not write to $TARGET, so nothing was changed."
-fi
-WORK=""
-trap 'rm -rf "${WORK:-}" "${STAGED:-}"; rmdir "$LOCK" 2>/dev/null || true' EXIT
-
-# An earlier run stopped between the two renames below, so the only copy there is the one
-# it set aside. Putting it back comes before anything is removed, or this run would delete
-# the copy that run left behind and a failure here would leave none at all.
-if [ -d "$PREVIOUS" ] && [ ! -d "$APP" ]; then
-    mv "$PREVIOUS" "$APP" || stop "A copy of LidGlass is sitting at $PREVIOUS from an interrupted install, and could not be put back."
-fi
-WORK="$(mktemp -d)"
-
-printf '  Downloading the latest release\n'
-curl -fL --progress-bar -o "$WORK/LidGlass.zip" "$ARCHIVE_URL" \
-    || stop "Could not download the release from $ARCHIVE_URL"
-
-ditto -x -k "$WORK/LidGlass.zip" "$WORK/expanded" || stop "The downloaded archive would not expand."
-NEW_APP="$WORK/expanded/LidGlass.app"
-[ -d "$NEW_APP" ] || stop "The downloaded archive does not contain LidGlass.app."
-
-# Catches an archive that arrived damaged. It says the bundle still matches its own
-# signature, not who signed it: LidGlass signs itself with a certificate it makes locally,
-# which no Mac but the one that made it has any reason to trust.
-codesign --verify --strict "$NEW_APP" 2>/dev/null || stop "The downloaded copy is damaged, so nothing was installed."
-
-# The copy already installed is not touched until the new one is sitting on the same volume,
-# ready to take its place, and it goes back if the swap itself fails. Deleting first would
-# mean an install that fails halfway leaves no working copy at all.
-printf '  Installing into %s\n' "$TARGET"
-rm -rf "$STAGED" "$PREVIOUS"
-ditto "$NEW_APP" "$STAGED" || { rm -rf "$STAGED"; stop "Could not write to $TARGET, so nothing was changed."; }
 if [ -d "$APP" ]; then
     mv "$APP" "$PREVIOUS" || { rm -rf "$STAGED"; stop "Could not replace the copy in $TARGET, so it was left as it was."; }
     if ! mv "$STAGED" "$APP"; then

@@ -390,6 +390,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             // content, which pin the width and leave the height free between what the two
             // columns need and what the sections come to.
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            // Resizable would otherwise offer full screen, which would strand a panel of fixed
+            // width alone in its own space.
+            window.collectionBehavior.insert(.fullScreenNone)
             window.isReleasedWhenClosed = false
             window.delegate = self
             window.setContentSize(hosting.view.fittingSize)
