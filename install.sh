@@ -41,14 +41,17 @@ fi
 # which administrators can write, and a standard account's own Applications folder, which
 # needs no password and works the same way.
 #
-# A folder holding only the backup an interrupted install left behind still counts as the
-# folder a copy lives in. Passing over it would strand that copy where nobody would look.
-holds_a_copy() {
-    [ -d "$1/LidGlass.app" ] || [ -d "$1/.LidGlass.app.previous" ]
-}
-if holds_a_copy "/Applications" && [ -w "/Applications" ]; then
+# A folder holding only the backup an interrupted install left behind still counts, or that
+# copy would be stranded where nobody would look. It counts for less than a real bundle
+# though, wherever each of them sits: a backup must never pull the install away from the copy
+# someone is actually opening, which is the whole point of choosing by where a copy lives.
+if [ -d "/Applications/LidGlass.app" ] && [ -w "/Applications" ]; then
     TARGET="/Applications"
-elif holds_a_copy "$HOME/Applications"; then
+elif [ -d "$HOME/Applications/LidGlass.app" ]; then
+    TARGET="$HOME/Applications"
+elif [ -d "/Applications/.LidGlass.app.previous" ] && [ -w "/Applications" ]; then
+    TARGET="/Applications"
+elif [ -d "$HOME/Applications/.LidGlass.app.previous" ]; then
     TARGET="$HOME/Applications"
 elif [ -w /Applications ]; then
     TARGET="/Applications"
