@@ -61,8 +61,10 @@ fi
 
 printf '\n'
 if [ "$READY" -eq 1 ]; then
-    printf '%sThis Mac can run LidGlass.%s\n' "$GOOD" "$OFF"
-    printf '%sDownload it from https://github.com/jwhitlow45/lidglass/releases/latest%s\n\n' "$DIM" "$OFF"
+    printf '%sThis Mac can run LidGlass.%s\n\n' "$GOOD" "$OFF"
+    printf 'Install it by running this:\n\n'
+    printf '  curl -fsSL https://raw.githubusercontent.com/jwhitlow45/lidglass/main/install.sh | bash\n\n'
+    printf '%sOr download it by hand from https://github.com/jwhitlow45/lidglass/releases/latest%s\n\n' "$DIM" "$OFF"
     exit 0
 fi
 

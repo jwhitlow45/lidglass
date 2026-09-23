@@ -25,6 +25,22 @@ rather not run something straight off the web.
 - Xcode command line tools (Swift 6), to build it yourself
 - Screen Recording permission for LidGlass. The glass is your own screen, redrawn.
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/jwhitlow45/lidglass/main/install.sh | bash
+```
+
+That runs [install.sh](install.sh), which downloads the latest release, replaces any copy
+already installed, and opens it. Or take `LidGlass.zip` from the
+[latest release](https://github.com/jwhitlow45/lidglass/releases/latest) and drag it to
+Applications yourself.
+
+Apple has not notarized LidGlass, so macOS cannot check who made it. A copy that arrives
+marked as quarantined, which is what happens when a browser downloads it, will not open
+until that mark is gone. The script says so and asks before removing it. Nothing is removed
+without an answer.
+
 ## Build and run
 
 ```sh
