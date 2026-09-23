@@ -189,9 +189,7 @@ struct SettingsView: View {
     /// takes width beside the content rather than floating over it. Reserving that width is
     /// what keeps it from reaching past the window.
     private static var scrollerGutter: CGFloat {
-        NSScroller.preferredScrollerStyle == .overlay
-            ? 15
-            : NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+        NSScroller.scrollerWidth(for: .regular, scrollerStyle: NSScroller.preferredScrollerStyle)
     }
     /// How far the scroll view itself stops short of the window, so the scroller has a
     /// margin of its own instead of sitting on the window frame.
@@ -385,17 +383,16 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingController(rootView: SettingsView(controller: controller))
             let window = NSWindow(contentViewController: hosting)
             window.title = "LidGlass"
-            // Resizable in height only. The sections are sized to the screen this opens on,
-            // which stops being true if the window is dragged to a smaller display, and a
-            // window that cannot be resized would leave the bottom of the list unreachable.
-            // The width is fixed because the two columns inside it are.
+            // Resizable, because the sections are sized to the screen this opens on and that
+            // stops being true once the window is dragged to a smaller display, where a fixed
+            // window would leave the bottom of the list unreachable. Which way it can be
+            // resized is left to the view: SwiftUI hands the window limits taken from the
+            // content, which pin the width and leave the height free between what the two
+            // columns need and what the sections come to.
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
-            let content = hosting.view.fittingSize
-            window.setContentSize(content)
-            window.contentMinSize = NSSize(width: content.width, height: min(360, content.height))
-            window.contentMaxSize = NSSize(width: content.width, height: .greatestFiniteMagnitude)
+            window.setContentSize(hosting.view.fittingSize)
             window.center()
             self.window = window
             watchForSimulationStops()

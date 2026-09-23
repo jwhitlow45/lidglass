@@ -290,12 +290,18 @@ final class LockScreenController {
         var scaling: NSImageScaling
         var allowsClipping: Bool
         /// What macOS shows wherever the picture does not reach, as components rather than a
-        /// color, since a color cannot cross threads either.
+        /// color, since a color cannot cross threads either. Measured in the same color space
+        /// the bitmap is drawn in, so they can be put back together without being read as some
+        /// other space's numbers and coming out a different color.
         var fill: (red: CGFloat, green: CGFloat, blue: CGFloat)
         /// The screen's backing scale factor, which the size-limited placements need: a
         /// picture's own size is in points and the bitmap drawn here is in pixels.
         var scale: CGFloat
     }
+
+    /// What the renderer's view presents in, and so what both the bitmap and its fill color
+    /// are measured in.
+    private static var bitmapColorSpace: CGColorSpace? { CGColorSpace(name: ScreenCaptureSource.colorSpace) }
 
     /// Main thread only, which is where `NSWorkspace` requires both of these to be read.
     private static func desktopPicture(for screen: NSScreen) -> DesktopPicture? {
@@ -304,7 +310,9 @@ final class LockScreenController {
         let options = workspace.desktopImageOptions(for: screen) ?? [:]
         let scaling = (options[.imageScaling] as? NSNumber)
             .flatMap { NSImageScaling(rawValue: $0.uintValue) } ?? .scaleProportionallyUpOrDown
-        let color = (options[.fillColor] as? NSColor)?.usingColorSpace(.deviceRGB)
+        let color = (options[.fillColor] as? NSColor).flatMap { fill in
+            LockScreenController.bitmapColorSpace.flatMap(NSColorSpace.init(cgColorSpace:)).flatMap(fill.usingColorSpace)
+        }
         return DesktopPicture(url: url,
                               hasPlacement: !options.isEmpty,
                               scaling: scaling,
@@ -349,9 +357,14 @@ final class LockScreenController {
         } ?? false
         let orientedWidth = isSwapped ? sourceHeight : sourceWidth
         let orientedHeight = isSwapped ? sourceWidth : sourceHeight
+        // A picture's natural size is measured in points, which is its pixel count only at 72
+        // per inch. A file tagged at another resolution is meant to be drawn smaller or larger
+        // than its pixels, and the two size-limited placements are measured against that.
+        let dpi = properties[kCGImagePropertyDPIWidth] as? CGFloat ?? 72
+        let naturalScale = (dpi > 0 ? 72 / dpi : 1) * picture.scale
         let drawSize = placedSize(oriented: CGSize(width: orientedWidth, height: orientedHeight),
                                   target: CGSize(width: CGFloat(width), height: CGFloat(height)),
-                                  picture: picture)
+                                  picture: picture, naturalScale: naturalScale)
         // Sized from the placement actually chosen, rather than from the screen alone: the
         // thumbnail keeps the source's aspect ratio, so its longest edge has to cover
         // whichever axis is scaled up the most, or the draw below enlarges an undersized
@@ -371,14 +384,17 @@ final class LockScreenController {
         guard image.width > 0, image.height > 0 else { return nil }
         // Matches the color space the renderer's view actually presents in: a mismatched
         // color space here would still decode correctly, but every color would come out
-        // shifted, since nothing downstream converts between them.
+        // shifted, since nothing downstream converts between them. The fill color below is
+        // measured in this same space for that reason.
+        let space = LockScreenController.bitmapColorSpace ?? CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
-                                      space: CGColorSpace(name: ScreenCaptureSource.colorSpace) ?? CGColorSpaceCreateDeviceRGB(),
+                                      space: space,
                                       bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else { return nil }
         // Whatever the picture does not cover is the same color macOS puts there, so a
         // wallpaper that does not reach the edges matches the screen underneath rather than
         // sitting on an assumed black.
-        context.setFillColor(CGColor(red: picture.fill.red, green: picture.fill.green, blue: picture.fill.blue, alpha: 1))
+        let fill = CGColor(colorSpace: space, components: [picture.fill.red, picture.fill.green, picture.fill.blue, 1])
+        context.setFillColor(fill ?? CGColor(gray: 0, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
         context.interpolationQuality = .high
         let origin = CGPoint(x: (CGFloat(width) - drawSize.width) / 2, y: (CGFloat(height) - drawSize.height) / 2)
@@ -389,7 +405,10 @@ final class LockScreenController {
     /// How large the wallpaper itself is drawn, before centering, for the scaling mode macOS
     /// reports. `allowClipping` is what separates covering the screen from fitting inside it:
     /// both scale proportionally, and only one is allowed to overhang and be cropped.
-    private static func placedSize(oriented: CGSize, target: CGSize, picture: DesktopPicture) -> CGSize {
+    /// `naturalScale` turns the picture's own size into pixels of this bitmap, so the two
+    /// placements that are limited by that size can be measured in the same units as the rest.
+    private static func placedSize(oriented: CGSize, target: CGSize, picture: DesktopPicture,
+                                   naturalScale: CGFloat) -> CGSize {
         let cover = max(target.width / oriented.width, target.height / oriented.height)
         // No placement could be read at all, so this falls back to what macOS itself starts
         // from, Fill Screen, rather than to what AppKit documents for an absent key, which
@@ -403,9 +422,9 @@ final class LockScreenController {
         case .scaleAxesIndependently:
             return target
         case .scaleNone:
-            return CGSize(width: oriented.width * picture.scale, height: oriented.height * picture.scale)
+            return CGSize(width: oriented.width * naturalScale, height: oriented.height * naturalScale)
         case .scaleProportionallyDown:
-            let limited = min(proportional, picture.scale)
+            let limited = min(proportional, naturalScale)
             return CGSize(width: oriented.width * limited, height: oriented.height * limited)
         default:
             return CGSize(width: oriented.width * proportional, height: oriented.height * proportional)

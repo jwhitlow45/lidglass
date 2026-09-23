@@ -31,26 +31,10 @@ fi
 # Not fatal: without the sensor the glass can still be driven by the slider in Settings,
 # which is worth saying plainly rather than either refusing or pretending all is well.
 if ! hidutil list --matching '{"PrimaryUsagePage":32,"PrimaryUsage":138}' 2>/dev/null \
-    | awk '$1 ~ /^0x/ { found = 1 } END { exit !found }'; then
+    | awk '$1 ~ /^0x/ && $4 == 32 && $5 == 138 { found = 1 } END { exit !found }'; then
     printf '%sThis Mac has no lid angle sensor, so the glass cannot follow the lid. It can\n' "$WARN"
     printf 'still be folded by hand with the slider in Settings. Installing anyway.%s\n\n' "$OFF"
 fi
-
-WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
-
-printf '  Downloading the latest release\n'
-curl -fL --progress-bar -o "$WORK/LidGlass.zip" "$ARCHIVE_URL" \
-    || stop "Could not download the release from $ARCHIVE_URL"
-
-ditto -x -k "$WORK/LidGlass.zip" "$WORK/expanded" || stop "The downloaded archive would not expand."
-NEW_APP="$WORK/expanded/LidGlass.app"
-[ -d "$NEW_APP" ] || stop "The downloaded archive does not contain LidGlass.app."
-
-# Catches an archive that arrived damaged. It says the bundle still matches its own
-# signature, not who signed it: LidGlass signs itself with a certificate it makes locally,
-# which no Mac but the one that made it has any reason to trust.
-codesign --verify --strict "$NEW_APP" 2>/dev/null || stop "The downloaded copy is damaged, so nothing was installed."
 
 # Where a copy already lives wins, so an update replaces the copy that opens at login
 # rather than leaving a second one behind in the other folder. Otherwise /Applications,
@@ -85,20 +69,68 @@ if pgrep -x -U "$ME" LidGlass >/dev/null 2>&1; then
     fi
 fi
 
+# A copy signed in to another account is not ours to quit, and /Applications is shared, so
+# replacing the bundle while someone else runs from it would break it under them.
+for RUNNING in $(pgrep -x LidGlass 2>/dev/null || true); do
+    case "$(ps -p "$RUNNING" -o comm= 2>/dev/null || true)" in
+        "$APP"/*)
+            stop "Another account is running LidGlass from $APP. Ask whoever is signed in there to quit it, then run this again."
+            ;;
+    esac
+done
+
+# Claimed and repaired before anything is downloaded, so a run that never gets its archive
+# still leaves this folder in a state someone can use.
+STAGED="$TARGET/.LidGlass.app.incoming"
+PREVIOUS="$TARGET/.LidGlass.app.previous"
+# mkdir either creates the lock or fails, with nothing in between, so a second installer
+# running at the same time stops here rather than clearing the first one's staged copy or
+# its backup out from under it.
+LOCK="$TARGET/.LidGlass.install.lock"
+if ! mkdir "$LOCK" 2>/dev/null; then
+    if [ -d "$LOCK" ]; then
+        stop "Another install is already running in $TARGET. If that is wrong, remove $LOCK and run this again."
+    fi
+    stop "Could not write to $TARGET, so nothing was changed."
+fi
+WORK=""
+trap 'rm -rf "${WORK:-}" "${STAGED:-}"; rmdir "$LOCK" 2>/dev/null || true' EXIT
+
+# An earlier run stopped between the two renames below, so the only copy there is the one
+# it set aside. Putting it back comes before anything is removed, or this run would delete
+# the copy that run left behind and a failure here would leave none at all.
+if [ -d "$PREVIOUS" ] && [ ! -d "$APP" ]; then
+    mv "$PREVIOUS" "$APP" || stop "A copy of LidGlass is sitting at $PREVIOUS from an interrupted install, and could not be put back."
+fi
+WORK="$(mktemp -d)"
+
+printf '  Downloading the latest release\n'
+curl -fL --progress-bar -o "$WORK/LidGlass.zip" "$ARCHIVE_URL" \
+    || stop "Could not download the release from $ARCHIVE_URL"
+
+ditto -x -k "$WORK/LidGlass.zip" "$WORK/expanded" || stop "The downloaded archive would not expand."
+NEW_APP="$WORK/expanded/LidGlass.app"
+[ -d "$NEW_APP" ] || stop "The downloaded archive does not contain LidGlass.app."
+
+# Catches an archive that arrived damaged. It says the bundle still matches its own
+# signature, not who signed it: LidGlass signs itself with a certificate it makes locally,
+# which no Mac but the one that made it has any reason to trust.
+codesign --verify --strict "$NEW_APP" 2>/dev/null || stop "The downloaded copy is damaged, so nothing was installed."
+
 # The copy already installed is not touched until the new one is sitting on the same volume,
 # ready to take its place, and it goes back if the swap itself fails. Deleting first would
 # mean an install that fails halfway leaves no working copy at all.
 printf '  Installing into %s\n' "$TARGET"
-STAGED="$TARGET/.LidGlass.app.incoming"
-PREVIOUS="$TARGET/.LidGlass.app.previous"
 rm -rf "$STAGED" "$PREVIOUS"
 ditto "$NEW_APP" "$STAGED" || { rm -rf "$STAGED"; stop "Could not write to $TARGET, so nothing was changed."; }
 if [ -d "$APP" ]; then
     mv "$APP" "$PREVIOUS" || { rm -rf "$STAGED"; stop "Could not replace the copy in $TARGET, so it was left as it was."; }
     if ! mv "$STAGED" "$APP"; then
-        mv "$PREVIOUS" "$APP" || true
         rm -rf "$STAGED"
-        stop "Could not install into $TARGET. The copy that was already there has been put back."
+        if mv "$PREVIOUS" "$APP"; then
+            stop "Could not install into $TARGET. The copy that was already there has been put back."
+        fi
+        stop "Could not install into $TARGET, and the copy that was already there could not be put back either. It is at $PREVIOUS."
     fi
     rm -rf "$PREVIOUS"
 else
