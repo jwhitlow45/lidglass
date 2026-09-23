@@ -52,7 +52,7 @@ fi
 # for the same device LidGlass itself opens: usage 138 on the sensor usage page, 32.
 NO_SENSOR=0
 if hidutil list --matching '{"PrimaryUsagePage":32,"PrimaryUsage":138}' 2>/dev/null \
-    | awk '$4 == 32 && $5 == 138 { found = 1 } END { exit !found }'; then
+    | awk '$1 ~ /^0x/ { found = 1 } END { exit !found }'; then
     report "Lid angle sensor" "found" 1
 else
     NO_SENSOR=1

@@ -163,9 +163,9 @@ struct SettingsView: View {
                     }
                 }
                 .frame(width: SettingsView.sectionsWidth)
-                .padding(.trailing, SettingsView.scrollerMargin)
+                .padding(.trailing, SettingsView.scrollerGutter)
             }
-            .frame(width: SettingsView.sectionsWidth + SettingsView.scrollerMargin)
+            .frame(width: SettingsView.sectionsWidth + SettingsView.scrollerGutter)
             // Scrolls rather than growing the window past the screen it opens on. The
             // sections keep being added to, and the window sizes itself to its content, so
             // without a ceiling the last section ends up below the bottom edge of a laptop
@@ -174,7 +174,7 @@ struct SettingsView: View {
             .frame(maxHeight: SettingsView.maximumSectionsHeight)
         }
         .padding(.leading, SettingsView.edgePadding)
-        .padding(.trailing, SettingsView.scrollerMargin)
+        .padding(.trailing, SettingsView.scrollerEdgeInset)
         .padding(.vertical, SettingsView.edgePadding)
         .onDisappear { settings.isSimulating = false }
     }
@@ -182,11 +182,20 @@ struct SettingsView: View {
     /// The sections column's own width, and the margin the window keeps around everything.
     private static let sectionsWidth: CGFloat = 420
     private static let edgePadding: CGFloat = 18
-    /// Kept clear on both sides of the scroller. macOS draws an overlay scroller hard
-    /// against the right edge of its scroll view, so the scroll view stops short of the
-    /// window edge and the sections stop short of the scroll view. Without the first the
-    /// scroller sits on the window frame, and without the second it sits on the sections.
-    private static let scrollerMargin: CGFloat = 10
+    /// macOS draws the scroller against the right edge of its scroll view, inside it, so the
+    /// sections stop this far short of that edge. Less and the scroller sits on them.
+    ///
+    /// Someone who has set scroll bars to always show gets the older kind instead, which
+    /// takes width beside the content rather than floating over it. Reserving that width is
+    /// what keeps it from reaching past the window.
+    private static var scrollerGutter: CGFloat {
+        NSScroller.preferredScrollerStyle == .overlay
+            ? 15
+            : NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+    }
+    /// How far the scroll view itself stops short of the window, so the scroller has a
+    /// margin of its own instead of sitting on the window frame.
+    private static let scrollerEdgeInset: CGFloat = 7
 
     /// How tall the scrolling sections are allowed to get. Measured against the screen the
     /// window opens on, not a fixed number, since what fits a desk display does not fit a
@@ -376,10 +385,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             let hosting = NSHostingController(rootView: SettingsView(controller: controller))
             let window = NSWindow(contentViewController: hosting)
             window.title = "LidGlass"
-            window.styleMask = [.titled, .closable, .miniaturizable]
+            // Resizable in height only. The sections are sized to the screen this opens on,
+            // which stops being true if the window is dragged to a smaller display, and a
+            // window that cannot be resized would leave the bottom of the list unreachable.
+            // The width is fixed because the two columns inside it are.
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             window.isReleasedWhenClosed = false
             window.delegate = self
-            window.setContentSize(hosting.view.fittingSize)
+            let content = hosting.view.fittingSize
+            window.setContentSize(content)
+            window.contentMinSize = NSSize(width: content.width, height: min(360, content.height))
+            window.contentMaxSize = NSSize(width: content.width, height: .greatestFiniteMagnitude)
             window.center()
             self.window = window
             watchForSimulationStops()

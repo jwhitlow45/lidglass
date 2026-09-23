@@ -31,7 +31,7 @@ fi
 # Not fatal: without the sensor the glass can still be driven by the slider in Settings,
 # which is worth saying plainly rather than either refusing or pretending all is well.
 if ! hidutil list --matching '{"PrimaryUsagePage":32,"PrimaryUsage":138}' 2>/dev/null \
-    | awk '$4 == 32 && $5 == 138 { found = 1 } END { exit !found }'; then
+    | awk '$1 ~ /^0x/ { found = 1 } END { exit !found }'; then
     printf '%sThis Mac has no lid angle sensor, so the glass cannot follow the lid. It can\n' "$WARN"
     printf 'still be folded by hand with the slider in Settings. Installing anyway.%s\n\n' "$OFF"
 fi
@@ -52,9 +52,15 @@ NEW_APP="$WORK/expanded/LidGlass.app"
 # which no Mac but the one that made it has any reason to trust.
 codesign --verify --strict "$NEW_APP" 2>/dev/null || stop "The downloaded copy is damaged, so nothing was installed."
 
-# /Applications is writable by administrators. A standard account installs into its own
-# Applications folder instead, which needs no password and works the same way.
-if [ -w /Applications ]; then
+# Where a copy already lives wins, so an update replaces the copy that opens at login
+# rather than leaving a second one behind in the other folder. Otherwise /Applications,
+# which administrators can write, and a standard account's own Applications folder, which
+# needs no password and works the same way.
+if [ -d "/Applications/LidGlass.app" ] && [ -w "/Applications" ]; then
+    TARGET="/Applications"
+elif [ -d "$HOME/Applications/LidGlass.app" ]; then
+    TARGET="$HOME/Applications"
+elif [ -w /Applications ]; then
     TARGET="/Applications"
 else
     TARGET="$HOME/Applications"
@@ -62,20 +68,42 @@ else
 fi
 APP="$TARGET/LidGlass.app"
 
-# A running copy has to go before its bundle is replaced underneath it. Settings are
-# written as they change, so nothing is lost by stopping it here.
-if pgrep -x LidGlass >/dev/null 2>&1; then
+# A running copy has to go before its bundle is replaced underneath it, and a copy that
+# will not go has to stop the install rather than have its bundle swapped while it runs.
+# Settings are written as they change, so nothing is lost by quitting it. Only this user's
+# copy is matched, so a copy running in another account is left alone.
+ME="$(id -u)"
+if pgrep -x -U "$ME" LidGlass >/dev/null 2>&1; then
     printf '  Quitting the copy that is running\n'
-    pkill -x LidGlass || true
+    pkill -x -U "$ME" LidGlass || true
     for _ in 1 2 3 4 5 6 7 8 9 10; do
-        pgrep -x LidGlass >/dev/null 2>&1 || break
+        pgrep -x -U "$ME" LidGlass >/dev/null 2>&1 || break
         sleep 0.3
     done
+    if pgrep -x -U "$ME" LidGlass >/dev/null 2>&1; then
+        stop "LidGlass is still running and would be replaced while it runs. Quit it from the menu bar, then run this again."
+    fi
 fi
 
+# The copy already installed is not touched until the new one is sitting on the same volume,
+# ready to take its place, and it goes back if the swap itself fails. Deleting first would
+# mean an install that fails halfway leaves no working copy at all.
 printf '  Installing into %s\n' "$TARGET"
-rm -rf "$APP"
-ditto "$NEW_APP" "$APP" || stop "Could not install into $TARGET."
+STAGED="$TARGET/.LidGlass.app.incoming"
+PREVIOUS="$TARGET/.LidGlass.app.previous"
+rm -rf "$STAGED" "$PREVIOUS"
+ditto "$NEW_APP" "$STAGED" || { rm -rf "$STAGED"; stop "Could not write to $TARGET, so nothing was changed."; }
+if [ -d "$APP" ]; then
+    mv "$APP" "$PREVIOUS" || { rm -rf "$STAGED"; stop "Could not replace the copy in $TARGET, so it was left as it was."; }
+    if ! mv "$STAGED" "$APP"; then
+        mv "$PREVIOUS" "$APP" || true
+        rm -rf "$STAGED"
+        stop "Could not install into $TARGET. The copy that was already there has been put back."
+    fi
+    rm -rf "$PREVIOUS"
+else
+    mv "$STAGED" "$APP" || { rm -rf "$STAGED"; stop "Could not install into $TARGET."; }
+fi
 
 # Only asked when there is something to answer for. A copy fetched by this script is not
 # quarantined, since that mark comes from browsers rather than from curl, but a copy that
@@ -106,6 +134,8 @@ printf '\n%sInstalled LidGlass %s in %s%s\n\n' "$GOOD" "$INSTALLED" "$TARGET" "$
 open "$APP" 2>/dev/null || true
 
 printf 'LidGlass lives in the menu bar, with no window and no Dock icon.\n'
+printf '%sApple has not notarized it, so macOS cannot check who made it. What was just\n' "$DIM"
+printf 'installed came from the releases of %s and nowhere else.%s\n' "$REPO" "$OFF"
 printf '%sOn first launch macOS asks for Screen Recording permission, since the glass is your\n' "$DIM"
 printf 'own screen redrawn. Allow LidGlass in System Settings > Privacy & Security > Screen &\n'
 printf 'System Audio Recording, then quit it from the menu bar and open it again.%s\n\n' "$OFF"

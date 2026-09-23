@@ -234,12 +234,21 @@ final class LockScreenController {
         let pixelSize = screen.frame.size.applying(CGAffineTransform(scaleX: screen.backingScaleFactor, y: screen.backingScaleFactor))
         let width = max(Int(pixelSize.width.rounded()), 1)
         let height = max(Int(pixelSize.height.rounded()), 1)
+        // Read here rather than inside the load: AppKit requires the main thread for both,
+        // and everything that reaches this point is already on it. What the load carries away
+        // is a plain value, so nothing of AppKit's crosses onto another thread.
+        guard let picture = LockScreenController.desktopPicture(for: screen) else {
+            isReloadingWallpaper = false
+            NSLog("LidGlass: no desktop picture is set for the lock screen effect")
+            lastWallpaperFailureTime = Date().timeIntervalSinceReferenceDate
+            return
+        }
         // Captured weakly: a pending load must not be what keeps this controller alive after
         // the setting that owns it has already let it go (turned off, then straight back on,
         // say, which would otherwise leave two controllers alive at once, this one a zombie
         // still able to act on the settings and session state it shares with the real one).
         Task { [weak self] in
-            let image = await LockScreenController.loadWallpaperImage(screen, width, height)
+            let image = await LockScreenController.loadWallpaperImage(picture, width, height)
             let texture: MTLTexture?
             if let image {
                 texture = try? await MTKTextureLoader(device: device).newTexture(cgImage: image, options: [.SRGB: false])
@@ -270,19 +279,50 @@ final class LockScreenController {
         }
     }
 
-    /// Loads and fills the current wallpaper for `screen` to exactly `width` x `height`. A
-    /// `static var` closure, like `isScreenLocked`, so a test can control timing and
-    /// success or failure without touching the real filesystem.
-    static var loadWallpaperImage: (_ screen: NSScreen, _ width: Int, _ height: Int) async -> CGImage? = { screen, width, height in
-        let workspace = NSWorkspace.shared
-        guard let url = workspace.desktopImageURL(for: screen) else { return nil }
-        return LockScreenController.fillImage(at: url, width: width, height: height,
-                                              options: workspace.desktopImageOptions(for: screen) ?? [:])
+    /// The desktop picture and how macOS is placing it, as plain values. AppKit's own types
+    /// cannot be carried onto another thread, and a load runs on one, so what it needs is
+    /// taken out of them first.
+    struct DesktopPicture: Sendable {
+        var url: URL
+        /// False when macOS reported no placement at all, which is not the same as reporting
+        /// a placement that happens to match the defaults.
+        var hasPlacement: Bool
+        var scaling: NSImageScaling
+        var allowsClipping: Bool
+        /// What macOS shows wherever the picture does not reach, as components rather than a
+        /// color, since a color cannot cross threads either.
+        var fill: (red: CGFloat, green: CGFloat, blue: CGFloat)
+        /// The screen's backing scale factor, which the size-limited placements need: a
+        /// picture's own size is in points and the bitmap drawn here is in pixels.
+        var scale: CGFloat
     }
 
-    /// Draws the image at `url` onto a `width` x `height` bitmap, placed the way macOS is
-    /// placing it on the desktop right now: `options` is what `NSWorkspace` reports for this
-    /// screen, and every scaling mode it can name is honored here. Guessing a single mode
+    /// Main thread only, which is where `NSWorkspace` requires both of these to be read.
+    private static func desktopPicture(for screen: NSScreen) -> DesktopPicture? {
+        let workspace = NSWorkspace.shared
+        guard let url = workspace.desktopImageURL(for: screen) else { return nil }
+        let options = workspace.desktopImageOptions(for: screen) ?? [:]
+        let scaling = (options[.imageScaling] as? NSNumber)
+            .flatMap { NSImageScaling(rawValue: $0.uintValue) } ?? .scaleProportionallyUpOrDown
+        let color = (options[.fillColor] as? NSColor)?.usingColorSpace(.deviceRGB)
+        return DesktopPicture(url: url,
+                              hasPlacement: !options.isEmpty,
+                              scaling: scaling,
+                              allowsClipping: (options[.allowClipping] as? NSNumber)?.boolValue ?? false,
+                              fill: (color?.redComponent ?? 0, color?.greenComponent ?? 0, color?.blueComponent ?? 0),
+                              scale: screen.backingScaleFactor)
+    }
+
+    /// Loads and places the desktop picture on a `width` x `height` bitmap. A `static var`
+    /// closure, like `isScreenLocked`, so a test can control timing and success or failure
+    /// without touching the real filesystem.
+    static var loadWallpaperImage: (_ picture: DesktopPicture, _ width: Int, _ height: Int) async -> CGImage? = { picture, width, height in
+        LockScreenController.fillImage(picture, width: width, height: height)
+    }
+
+    /// Draws the desktop picture onto a `width` x `height` bitmap, placed the way macOS is
+    /// placing it on the desktop right now: every scaling mode `NSWorkspace` can report is
+    /// honored here. Guessing a single mode
     /// instead, even the common one, silently shows a different part of the picture than the
     /// screen underneath does. A stretched portrait photo, for one, keeps its whole subject
     /// on screen, squashed, while covering and cropping the same file discards everything
@@ -293,9 +333,8 @@ final class LockScreenController {
     /// pixels. That matches the normal overlay's captured frame, which is always the screen's
     /// pixel size. A wallpaper file is not: handing the shader a texture of some other shape
     /// pulls the rounded corners into ovals.
-    private static func fillImage(at url: URL, width: Int, height: Int,
-                                  options: [NSWorkspace.DesktopImageOptionKey: Any]) -> CGImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+    private static func fillImage(_ picture: DesktopPicture, width: Int, height: Int) -> CGImage? {
+        guard let source = CGImageSourceCreateWithURL(picture.url as CFURL, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let sourceWidth = properties[kCGImagePropertyPixelWidth] as? CGFloat,
               let sourceHeight = properties[kCGImagePropertyPixelHeight] as? CGFloat,
@@ -312,7 +351,7 @@ final class LockScreenController {
         let orientedHeight = isSwapped ? sourceWidth : sourceHeight
         let drawSize = placedSize(oriented: CGSize(width: orientedWidth, height: orientedHeight),
                                   target: CGSize(width: CGFloat(width), height: CGFloat(height)),
-                                  options: options)
+                                  picture: picture)
         // Sized from the placement actually chosen, rather than from the screen alone: the
         // thumbnail keeps the source's aspect ratio, so its longest edge has to cover
         // whichever axis is scaled up the most, or the draw below enlarges an undersized
@@ -339,8 +378,7 @@ final class LockScreenController {
         // Whatever the picture does not cover is the same color macOS puts there, so a
         // wallpaper that does not reach the edges matches the screen underneath rather than
         // sitting on an assumed black.
-        let fillColor = (options[.fillColor] as? NSColor)?.usingColorSpace(.deviceRGB)?.cgColor
-        context.setFillColor(fillColor ?? CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        context.setFillColor(CGColor(red: picture.fill.red, green: picture.fill.green, blue: picture.fill.blue, alpha: 1))
         context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
         context.interpolationQuality = .high
         let origin = CGPoint(x: (CGFloat(width) - drawSize.width) / 2, y: (CGFloat(height) - drawSize.height) / 2)
@@ -351,22 +389,24 @@ final class LockScreenController {
     /// How large the wallpaper itself is drawn, before centering, for the scaling mode macOS
     /// reports. `allowClipping` is what separates covering the screen from fitting inside it:
     /// both scale proportionally, and only one is allowed to overhang and be cropped.
-    private static func placedSize(oriented: CGSize, target: CGSize,
-                                   options: [NSWorkspace.DesktopImageOptionKey: Any]) -> CGSize {
-        let scaling = (options[.imageScaling] as? NSNumber)
-            .flatMap { NSImageScaling(rawValue: $0.uintValue) } ?? .scaleProportionallyUpOrDown
-        let allowsClipping = (options[.allowClipping] as? NSNumber)?.boolValue ?? false
+    private static func placedSize(oriented: CGSize, target: CGSize, picture: DesktopPicture) -> CGSize {
         let cover = max(target.width / oriented.width, target.height / oriented.height)
+        // No placement could be read at all, so this falls back to what macOS itself starts
+        // from, Fill Screen, rather than to what AppKit documents for an absent key, which
+        // would letterbox the picture against a screen it used to cover.
+        guard picture.hasPlacement else {
+            return CGSize(width: oriented.width * cover, height: oriented.height * cover)
+        }
         let fit = min(target.width / oriented.width, target.height / oriented.height)
-        let proportional = allowsClipping ? cover : fit
-        switch scaling {
+        let proportional = picture.allowsClipping ? cover : fit
+        switch picture.scaling {
         case .scaleAxesIndependently:
             return target
         case .scaleNone:
-            return oriented
+            return CGSize(width: oriented.width * picture.scale, height: oriented.height * picture.scale)
         case .scaleProportionallyDown:
-            let scale = min(proportional, 1)
-            return CGSize(width: oriented.width * scale, height: oriented.height * scale)
+            let limited = min(proportional, picture.scale)
+            return CGSize(width: oriented.width * limited, height: oriented.height * limited)
         default:
             return CGSize(width: oriented.width * proportional, height: oriented.height * proportional)
         }
