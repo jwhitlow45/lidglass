@@ -163,13 +163,9 @@ struct SettingsView: View {
                     }
                 }
                 .frame(width: SettingsView.sectionsWidth)
-                .padding(.trailing, SettingsView.edgePadding)
+                .padding(.trailing, SettingsView.scrollerMargin)
             }
-            // Reaches the window's right edge, rather than stopping where the sections do,
-            // so the scroller sits in the margin beside them. macOS draws it inside the
-            // scroll view's own bounds, over whatever is under it, so a scroll view only as
-            // wide as its content gets a scroller on top of that content.
-            .frame(width: SettingsView.sectionsWidth + SettingsView.edgePadding)
+            .frame(width: SettingsView.sectionsWidth + SettingsView.scrollerMargin)
             // Scrolls rather than growing the window past the screen it opens on. The
             // sections keep being added to, and the window sizes itself to its content, so
             // without a ceiling the last section ends up below the bottom edge of a laptop
@@ -178,15 +174,19 @@ struct SettingsView: View {
             .frame(maxHeight: SettingsView.maximumSectionsHeight)
         }
         .padding(.leading, SettingsView.edgePadding)
+        .padding(.trailing, SettingsView.scrollerMargin)
         .padding(.vertical, SettingsView.edgePadding)
         .onDisappear { settings.isSimulating = false }
     }
 
     /// The sections column's own width, and the margin the window keeps around everything.
-    /// The scroll view is one margin wider than the sections, which is where its scroller
-    /// goes.
     private static let sectionsWidth: CGFloat = 420
     private static let edgePadding: CGFloat = 18
+    /// Kept clear on both sides of the scroller. macOS draws an overlay scroller hard
+    /// against the right edge of its scroll view, so the scroll view stops short of the
+    /// window edge and the sections stop short of the scroll view. Without the first the
+    /// scroller sits on the window frame, and without the second it sits on the sections.
+    private static let scrollerMargin: CGFloat = 10
 
     /// How tall the scrolling sections are allowed to get. Measured against the screen the
     /// window opens on, not a fixed number, since what fits a desk display does not fit a
